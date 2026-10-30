@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, Filter, History, StickyNote, Download, ArrowUp, ArrowDown, FileText, CheckSquare, Square
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -21,7 +21,15 @@ export default function App() {
   const [regras, setRegras] = useState([]);
   const [cargosCustom, setCargosCustom] = useState([]);
 
-  // Estados para moderação e criação
+  // Estados de Moderação / Filtros / Seleção
+  const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroCargo, setFiltroCargo] = useState('todos');
+  const [membrosSelecionados, setMembrosSelecionados] = useState([]);
+  const [membroModalAudit, setMembroModalAudit] = useState(null);
+  const [notaEdicao, setNotaEdicao] = useState('');
+
+  // Formulários
   const [novaRoupa, setNovaRoupa] = useState({ nome: '', top: '', calcas: '', mascara: '', imagem: '' });
   const [novaRadio, setNovaRadio] = useState({ canal: '', freq: '' });
   const [novaRegra, setNovaRegra] = useState('');
@@ -38,7 +46,7 @@ export default function App() {
   ];
 
   const cargosPadrao = [
-    { categoria: "Cargos Administrativos e Staff", cargos: ["Staff ATHOS PvP", "01 Founder´s", "01 Leader´s", "| Magnata 01! ©", "Resp. Manager´s", "01 Manager´s", "Suport", "Manager´s Approval", "Resp. Member´s"] },
+    { categoria: "Cargos Administrativos e Staff", cargos: ["Staff ATHOS PvP", "01 Founder´s", "01 Leader´s", "| Magnata 01! ©", "Resp. Manager´s", "01 Manager´s", "Suport", "Manager´s Approval", "Resp. Member´s", "Owner"] },
     { categoria: "Membros e Comunidade", cargos: ["01 Member´s", "Server Booster´s", "01 Friend´s", "01 Visitant", "PVP Player", "Homem", "Mulher"] },
     { categoria: "Cargos de Moderação e Punições", cargos: ["Ban Temporário", "Ban Perma", "Muted", "Ausente", "Warning 1", "Warning 2", "Warning AFK"] },
     { categoria: "Bots e Integrações", cargos: ["Streamer"] },
@@ -71,14 +79,15 @@ export default function App() {
             }
             setUserData(data);
           } else {
-            // Se o utilizador for novo, cria o documento base
             const defaultData = { 
               uid: currentUser.uid,
               email: currentUser.email,
               nome: currentUser.displayName || 'Membro',
               status: 'sem_candidatura', 
               roles: ['01 Visitant'],
-              role: '01 Visitant'
+              role: '01 Visitant',
+              auditLog: [],
+              notasInternas: ''
             };
             setDoc(userRef, defaultData, { merge: true });
             setUserData(defaultData);
@@ -104,7 +113,13 @@ export default function App() {
       const usersList = [];
       usersSnap.forEach((d) => {
         const u = d.data();
-        usersList.push({ id: d.id, ...u, roles: u.roles || (u.role ? [u.role] : ['01 Visitant']) });
+        usersList.push({ 
+          id: d.id, 
+          ...u, 
+          roles: u.roles || (u.role ? [u.role] : ['01 Visitant']),
+          auditLog: u.auditLog || [],
+          notasInternas: u.notasInternas || ''
+        });
       });
       setAllUsers(usersList);
 
@@ -132,6 +147,16 @@ export default function App() {
     }
   };
 
+  const registarAuditLog = (userObj, acao, detalhe) => {
+    const novoLog = {
+      data: new Date().toLocaleString('pt-PT'),
+      autor: userData?.nome || user?.email || 'Sistema/Staff',
+      acao,
+      detalhe
+    };
+    return [novoLog, ...(userObj.auditLog || [])];
+  };
+
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -148,6 +173,7 @@ export default function App() {
     e.preventDefault();
     if (!user) return;
     const userRef = doc(db, 'users', user.uid);
+    const logInicial = [{ data: new Date().toLocaleString('pt-PT'), autor: user.displayName, acao: 'Candidatura Submetida', detalhe: 'Formulário inicial preenchido' }];
     const payload = {
       ...userData,
       uid: user.uid,
@@ -157,37 +183,105 @@ export default function App() {
       ...formData,
       status: 'pendente',
       roles: ['01 Visitant'],
-      dataSubmissao: new Date().toISOString()
+      auditLog: logInicial,
+      dataEntrada: new Date().toLocaleDateString('pt-PT')
     };
     await setDoc(userRef, payload, { merge: true });
     setUserData(payload);
   };
 
   const atualizarStatusCandidato = async (targetUid, novoStatus, novosCargos = ['01 Member´s']) => {
+    const userTarget = allUsers.find(u => u.uid === targetUid);
+    if (!userTarget) return;
+    const logs = registarAuditLog(userTarget, 'Alteração de Estado', `Estado alterado para ${novoStatus.toUpperCase()}`);
     const userRef = doc(db, 'users', targetUid);
-    await updateDoc(userRef, { status: novoStatus, roles: novosCargos, role: novosCargos[0] || '01 Member´s' });
+    await updateDoc(userRef, { status: novoStatus, roles: novosCargos, role: novosCargos[0] || '01 Member´s', auditLog: logs });
     carregarDadosGang();
   };
 
   const alternarCargoMembro = async (targetUid, cargoTarget, userRolesAtual = []) => {
+    const userTarget = allUsers.find(u => u.uid === targetUid);
+    if (!userTarget) return;
+
     let novasRoles = [...userRolesAtual];
+    let acaoTxt = '';
     if (novasRoles.includes(cargoTarget)) {
       novasRoles = novasRoles.filter(c => c !== cargoTarget);
+      acaoTxt = `Cargo Removido: ${cargoTarget}`;
     } else {
       novasRoles.push(cargoTarget);
+      acaoTxt = `Cargo Adicionado: ${cargoTarget}`;
     }
     if (novasRoles.length === 0) novasRoles = ['01 Member´s'];
+    
+    const logs = registarAuditLog(userTarget, 'Gestão de Cargo', acaoTxt);
     const userRef = doc(db, 'users', targetUid);
-    await updateDoc(userRef, { roles: novasRoles, role: novasRoles[0] });
+    await updateDoc(userRef, { roles: novasRoles, role: novasRoles[0], auditLog: logs });
     carregarDadosGang();
   };
 
   const alternarDestaqueMembro = async (targetUid, destaqueAtual) => {
+    const userTarget = allUsers.find(u => u.uid === targetUid);
+    if (!userTarget) return;
+    const logs = registarAuditLog(userTarget, 'Destaque', destaqueAtual ? 'Destaque Removido' : 'Destaque Atribuído');
     const userRef = doc(db, 'users', targetUid);
-    await updateDoc(userRef, { emDestaque: !destaqueAtual });
+    await updateDoc(userRef, { emDestaque: !destaqueAtual, auditLog: logs });
     carregarDadosGang();
   };
 
+  const guardarNotaInterna = async (targetUid) => {
+    const userTarget = allUsers.find(u => u.uid === targetUid);
+    if (!userTarget) return;
+    const logs = registarAuditLog(userTarget, 'Nota Interna', 'Nota confidencial atualizada');
+    const userRef = doc(db, 'users', targetUid);
+    await updateDoc(userRef, { notasInternas: notaEdicao, auditLog: logs });
+    setMembroModalAudit(prev => prev ? { ...prev, notasInternas: notaEdicao } : null);
+    carregarDadosGang();
+  };
+
+  // Funções de Ações em Massa
+  const alternarSelecaoMembro = (uid) => {
+    if (membrosSelecionados.includes(uid)) {
+      setMembrosSelecionados(membrosSelecionados.filter(i => i !== uid));
+    } else {
+      setMembrosSelecionados([...membrosSelecionados, uid]);
+    }
+  };
+
+  const selecionarTodosVisiveis = () => {
+    if (membrosSelecionados.length === membrosFiltrados.length) {
+      setMembrosSelecionados([]);
+    } else {
+      setMembrosSelecionados(membrosFiltrados.map(m => m.uid));
+    }
+  };
+
+  const acaoEmMassaCargo = async (cargo, adicionar = true) => {
+    for (const uid of membrosSelecionados) {
+      const u = allUsers.find(x => x.uid === uid);
+      if (u) {
+        let novas = [...u.roles];
+        if (adicionar && !novas.includes(cargo)) novas.push(cargo);
+        if (!adicionar) novas = novas.filter(x => x !== cargo);
+        const logs = registarAuditLog(u, 'Ação em Massa', `${adicionar ? 'Adicionado' : 'Removido'} cargo ${cargo}`);
+        await updateDoc(doc(db, 'users', uid), { roles: novas, auditLog: logs });
+      }
+    }
+    setMembrosSelecionados([]);
+    carregarDadosGang();
+  };
+
+  const exportarMembrosJSON = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allUsers, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "membros_magnatas01.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  // Moderação
   const adicionarRoupa = async (e) => {
     e.preventDefault();
     await addDoc(collection(db, 'roupas'), novaRoupa);
@@ -196,7 +290,7 @@ export default function App() {
   };
 
   const apagarRoupa = async (id) => {
-    await deleteDoc(doc(db, 'roupas', id));
+    await deleteDoc(doc(doc(db, 'roupas', id)));
     carregarDadosGang();
   };
 
@@ -315,6 +409,27 @@ export default function App() {
   const userRoles = userData?.roles || (userData?.role ? [userData.role] : []);
   const isFounder = userRoles.some(r => ['Owner', '| Magnata 01! ©', '01 Founder´s', 'Founder'].includes(r));
   const isSuportOrAdmin = isFounder || userRoles.some(r => ['Suport', 'Staff ATHOS PvP', 'Resp. Manager´s', 'Manager´s Approval'].includes(r));
+
+  // Filtro avançado de membros
+  const membrosFiltrados = allUsers.filter(u => {
+    const nome = (u.nome || u.email || '').toLowerCase();
+    const ingame = (u.nomeIngame || '').toLowerCase();
+    const idGame = (u.idIngame || '').toLowerCase();
+    const motivo = (u.motivo || '').toLowerCase();
+    const buscaLower = busca.toLowerCase();
+
+    const bateBusca = nome.includes(buscaLower) || ingame.includes(buscaLower) || idGame.includes(buscaLower) || motivo.includes(buscaLower);
+    const bateStatus = filtroStatus === 'todos' || u.status === filtroStatus;
+    const bateCargo = filtroCargo === 'todos' || u.roles?.includes(filtroCargo);
+
+    return bateBusca && bateStatus && bateCargo;
+  });
+
+  // Métricas do Dashboard
+  const totalAtivos = allUsers.filter(u => u.status === 'aprovado').length;
+  const totalPendentes = allUsers.filter(u => u.status === 'pendente').length;
+  const totalWarnings = allUsers.filter(u => u.roles?.some(r => r.includes('Warning'))).length;
+  const totalFounders = allUsers.filter(u => u.roles?.some(r => ['Owner', '01 Founder´s', '| Magnata 01! ©'].includes(r))).length;
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans">
@@ -595,62 +710,143 @@ export default function App() {
 
           {activeTab === 'admin' && isSuportOrAdmin && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-black text-amber-500">PAINEL ADMINISTRATIVO & GESTÃO DE MEMBROS</h2>
+              {/* DASHBOARD RESUMO */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center space-x-4">
+                  <div className="p-3 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-400"><Users className="w-6 h-6"/></div>
+                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Membros Ativos</p><p className="text-2xl font-black text-white">{totalAtivos}</p></div>
+                </div>
+                <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center space-x-4">
+                  <div className="p-3 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-400"><Clock className="w-6 h-6"/></div>
+                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Pendentes</p><p className="text-2xl font-black text-white">{totalPendentes}</p></div>
+                </div>
+                <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center space-x-4">
+                  <div className="p-3 bg-red-950/60 border border-red-800 rounded-xl text-red-400"><AlertCircle className="w-6 h-6"/></div>
+                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Warnings Ativos</p><p className="text-2xl font-black text-white">{totalWarnings}</p></div>
+                </div>
+                <div className="bg-neutral-900 border border-neutral-800 p-5 rounded-2xl flex items-center space-x-4">
+                  <div className="p-3 bg-purple-950/60 border border-purple-800 rounded-xl text-purple-400"><Crown className="w-6 h-6"/></div>
+                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Founders / Staff</p><p className="text-2xl font-black text-white">{totalFounders}</p></div>
+                </div>
+              </div>
+
+              {/* BARRA DE PESQUISA E FILTROS */}
+              <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center">
+                <div className="flex-1 w-full flex items-center space-x-2 bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2">
+                  <Search className="w-4 h-4 text-neutral-500" />
+                  <input type="text" placeholder="Pesquisar por Nome, ID In-game, Motivo..." value={busca} onChange={e => setBusca(e.target.value)} className="bg-transparent text-sm text-white outline-none w-full" />
+                </div>
+                <div className="flex gap-2 w-full md:w-auto">
+                  <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="bg-neutral-950 border border-neutral-800 text-xs text-white rounded-xl p-2.5 outline-none">
+                    <option value="todos">Todos os Estados</option>
+                    <option value="aprovado">Aprovados</option>
+                    <option value="pendente">Pendentes</option>
+                    <option value="reprovado">Reprovados</option>
+                  </select>
+                  <select value={filtroCargo} onChange={e => setFiltroCargo(e.target.value)} className="bg-neutral-950 border border-neutral-800 text-xs text-white rounded-xl p-2.5 outline-none">
+                    <option value="todos">Todos os Cargos</option>
+                    {cargosDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button onClick={exportarMembrosJSON} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2.5 rounded-xl text-xs font-bold flex items-center space-x-1" title="Exportar Dados">
+                    <Download className="w-4 h-4"/>
+                  </button>
+                </div>
+              </div>
+
+              {/* AÇÕES EM MASSA */}
+              {membrosSelecionados.length > 0 && (
+                <div className="bg-red-950/80 border border-red-800 rounded-2xl p-4 flex items-center justify-between animate-fadeIn">
+                  <span className="text-xs font-bold text-red-200">{membrosSelecionados.length} membro(s) selecionado(s)</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => acaoEmMassaCargo('Warning 1', true)} className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">+ Warning 1</button>
+                    <button onClick={() => acaoEmMassaCargo('Ban Temporário', true)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">+ Ban Temp</button>
+                    <button onClick={() => setMembrosSelecionados([])} className="text-xs text-neutral-400 hover:text-white underline">Cancelar</button>
+                  </div>
+                </div>
+              )}
+
+              {/* TABELA PRINCIPAL COM ORGANIZAÇÃO DE CARGOS POR CATEGORIAS */}
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-neutral-800 text-neutral-400">
+                      <th className="pb-3 w-8">
+                        <button onClick={selecionarTodosVisiveis} className="text-neutral-500 hover:text-white">
+                          {membrosSelecionados.length === membrosFiltrados.length && membrosFiltrados.length > 0 ? <CheckSquare className="w-4 h-4 text-red-500"/> : <Square className="w-4 h-4"/>}
+                        </button>
+                      </th>
                       <th className="pb-3">Utilizador</th>
                       <th className="pb-3">In-Game / Respostas</th>
                       <th className="pb-3">Estado</th>
                       <th className="pb-3">Destaque</th>
-                      <th className="pb-3">Atribuir Cargos (Ativa/Desativa)</th>
-                      <th className="pb-3 text-right">Ações</th>
+                      <th className="pb-3">Atribuir Cargos (Por Categorias)</th>
+                      <th className="pb-3 text-right">Ações & Histórico</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-800">
-                    {allUsers.map(u => (
-                      <tr key={u.uid}>
-                        <td className="py-4 font-bold text-white">{u.nome || u.email}</td>
-                        <td className="py-4 text-neutral-300">
-                          <div><span className="font-bold text-white">{u.nomeIngame || 'N/A'}</span> (ID: {u.idIngame || '-'})</div>
-                          {u.motivo && <div className="text-xs text-neutral-500 italic mt-0.5">Motivo: "{u.motivo}"</div>}
-                        </td>
-                        <td className="py-4"><span className={`px-2.5 py-1 rounded-full text-xs font-bold ${u.status === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : u.status === 'pendente' ? 'bg-amber-950 text-amber-400' : 'bg-red-950 text-red-400'}`}>{u.status}</span></td>
-                        <td className="py-4">
-                          <button onClick={() => alternarDestaqueMembro(u.uid, u.emDestaque)} className={`p-1.5 rounded-lg border ${u.emDestaque ? 'bg-amber-950 border-amber-500 text-amber-400' : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-white'}`}>
-                            <Star className="w-4 h-4 fill-current" />
-                          </button>
-                        </td>
-                        <td className="py-4">
-                          <div className="flex flex-wrap gap-1 max-w-xs">
-                            {cargosDisponiveis.map(c => {
-                              const ativo = u.roles?.includes(c);
-                              return (
-                                <button 
-                                  key={c} 
-                                  onClick={() => alternarCargoMembro(u.uid, c, u.roles)}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border ${ativo ? 'bg-red-600 text-white border-red-500' : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:border-neutral-600'}`}
-                                >
-                                  {c}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </td>
-                        <td className="py-4 text-right space-x-2">
-                          {u.status === 'pendente' && (
-                            <>
-                              <button onClick={() => atualizarStatusCandidato(u.uid, 'aprovado', ['01 Member´s'])} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Aprovar</button>
-                              <button onClick={() => atualizarStatusCandidato(u.uid, 'reprovado', ['01 Visitant'])} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Reprovar</button>
-                            </>
-                          )}
-                          {u.status === 'aprovado' && (
-                            <span className="text-xs text-emerald-500 font-bold">Ativo</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {membrosFiltrados.map(u => {
+                      const isSelected = membrosSelecionados.includes(u.uid);
+                      return (
+                        <tr key={u.uid} className={isSelected ? 'bg-red-950/20' : ''}>
+                          <td className="py-4">
+                            <button onClick={() => alternarSelecaoMembro(u.uid)} className="text-neutral-500 hover:text-white">
+                              {isSelected ? <CheckSquare className="w-4 h-4 text-red-500"/> : <Square className="w-4 h-4"/>}
+                            </button>
+                          </td>
+                          <td className="py-4 font-bold text-white">
+                            <div>{u.nome || u.email}</div>
+                            <span className="text-[10px] text-neutral-500 font-mono">UID: {u.uid.slice(0,6)}...</span>
+                          </td>
+                          <td className="py-4 text-neutral-300">
+                            <div><span className="font-bold text-white">{u.nomeIngame || 'N/A'}</span> (ID: {u.idIngame || '-'})</div>
+                            {u.motivo && <div className="text-xs text-neutral-500 italic mt-0.5">Motivo: "{u.motivo}"</div>}
+                          </td>
+                          <td className="py-4">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${u.status === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : u.status === 'pendente' ? 'bg-amber-950 text-amber-400' : 'bg-red-950 text-red-400'}`}>{u.status}</span>
+                          </td>
+                          <td className="py-4">
+                            <button onClick={() => alternarDestaqueMembro(u.uid, u.emDestaque)} className={`p-1.5 rounded-lg border ${u.emDestaque ? 'bg-amber-950 border-amber-500 text-amber-400' : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-white'}`}>
+                              <Star className="w-4 h-4 fill-current" />
+                            </button>
+                          </td>
+                          
+                          {/* ATRIBUIR CARGOS ORGANIZADO VISUALMENTE POR CATEGORIAS */}
+                          <td className="py-4 space-y-2 max-w-md">
+                            {categoriasCargos.map((cat, catIdx) => (
+                              <div key={catIdx} className="bg-neutral-950/80 border border-neutral-800 p-2 rounded-xl">
+                                <p className="text-[10px] font-bold text-red-500 uppercase mb-1">{cat.categoria}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {cat.cargos.map(c => {
+                                    const ativo = u.roles?.includes(c);
+                                    return (
+                                      <button 
+                                        key={c} 
+                                        onClick={() => alternarCargoMembro(u.uid, c, u.roles)}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${ativo ? 'bg-red-600 text-white border-red-500 shadow-md' : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-600'}`}
+                                      >
+                                        {c}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </td>
+
+                          <td className="py-4 text-right space-x-2">
+                            {u.status === 'pendente' && (
+                              <>
+                                <button onClick={() => atualizarStatusCandidato(u.uid, 'aprovado', ['01 Member´s'])} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Aprovar</button>
+                                <button onClick={() => atualizarStatusCandidato(u.uid, 'reprovado', ['01 Visitant'])} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Reprovar</button>
+                              </>
+                            )}
+                            <button onClick={() => { setMembroModalAudit(u); setNotaEdicao(u.notasInternas || ''); }} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 rounded-lg text-xs font-bold inline-flex items-center space-x-1" title="Ver Perfil & Audit Log">
+                              <History className="w-4 h-4 text-amber-500"/>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -658,6 +854,57 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* MODAL AUDIT LOG & NOTAS INTERNAS */}
+      {membroModalAudit && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-neutral-900 border border-neutral-800 max-w-2xl w-full rounded-2xl p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start border-b border-neutral-800 pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-white">{membroModalAudit.nomeIngame || membroModalAudit.nome}</h3>
+                <p className="text-xs text-neutral-400">{membroModalAudit.email} • ID: {membroModalAudit.idIngame || 'N/A'}</p>
+              </div>
+              <button onClick={() => setMembroModalAudit(null)} className="text-neutral-500 hover:text-white"><XCircle className="w-6 h-6"/></button>
+            </div>
+
+            {/* Estatísticas Rápidas do Membro */}
+            <div className="grid grid-cols-3 gap-3 bg-neutral-950 p-4 rounded-xl text-center border border-neutral-800">
+              <div><p className="text-[10px] text-neutral-500 uppercase font-bold">Data de Entrada</p><p className="text-xs font-bold text-white">{membroModalAudit.dataEntrada || 'N/A'}</p></div>
+              <div><p className="text-[10px] text-neutral-500 uppercase font-bold">Cargos Ativos</p><p className="text-xs font-bold text-emerald-400">{membroModalAudit.roles?.length || 0}</p></div>
+              <div><p className="text-[10px] text-neutral-500 uppercase font-bold">Estado Atual</p><p className="text-xs font-bold text-amber-400 uppercase">{membroModalAudit.status}</p></div>
+            </div>
+
+            {/* Notas Internas Privadas */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-amber-500 flex items-center space-x-2">
+                <StickyNote className="w-4 h-4"/><span>Notas Internas (Privado para Staff/Owner)</span>
+              </label>
+              <textarea rows="3" value={notaEdicao} onChange={e => setNotaEdicao(e.target.value)} placeholder="Anotações de comportamento, avisos ou lembretes..." className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500"></textarea>
+              <button onClick={() => guardarNotaInterna(membroModalAudit.uid)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-1.5 px-4 rounded-lg text-xs">Guardar Nota</button>
+            </div>
+
+            {/* Audit Log (Histórico) */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-bold text-white flex items-center space-x-2"><History className="w-4 h-4 text-red-500"/><span>Histórico de Ações (Audit Log)</span></h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {membroModalAudit.auditLog?.map((log, idx) => (
+                  <div key={idx} className="bg-neutral-950 border border-neutral-800/60 p-3 rounded-xl text-xs space-y-1">
+                    <div className="flex justify-between text-neutral-400 font-mono text-[10px]">
+                      <span>{log.data}</span>
+                      <span className="text-red-400 font-bold">{log.autor}</span>
+                    </div>
+                    <p className="font-bold text-white">{log.acao}</p>
+                    <p className="text-neutral-400">{log.detalhe}</p>
+                  </div>
+                ))}
+                {(!membroModalAudit.auditLog || membroModalAudit.auditLog.length === 0) && (
+                  <p className="text-xs text-neutral-500 italic">Sem histórico de ações registado.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
