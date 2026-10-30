@@ -7,8 +7,9 @@ const firebaseConfig = {
   authDomain: "sitemagnatas01.firebaseapp.com",
   projectId: "sitemagnatas01",
   storageBucket: "sitemagnatas01.firebasestorage.app",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abc123def456"
+  messagingSenderId: "848648566155",
+  appId: "1:848648566155:web:024e93ea5dcecaaef86b8e",
+  measurementId: "G-Q57NRPGDVE"
 };
 
 const app = initializeApp(firebaseConfig);
