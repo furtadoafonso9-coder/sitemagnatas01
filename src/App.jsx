@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, Image as ImageIcon
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, User, Bell, MessageSquare, CheckCircle, ShieldAlert
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -11,16 +11,22 @@ export default function App() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [darkMode, setDarkMode] = useState(true); // Estado para Modo Escuro / Branco
+  const [darkMode, setDarkMode] = useState(true);
 
   const [allUsers, setAllUsers] = useState([]);
-  const [formData, setFormData] = useState({ idade: '', nomeIngame: '', idIngame: '', kills: '', tempoCidade: '', motivo: '', fotoPerfil: '' });
+  const [formData, setFormData] = useState({ idade: '', nomeIngame: '', idIngame: '', kills: '', tempoCidade: '', motivo: '', fotoPerfil: '', bio: '' });
+
+  // Edição de Perfil Próprio
+  const [perfilEdit, setPerfilEdit] = useState({ fotoPerfil: '', bio: '' });
 
   // Conteúdos dinâmicos
   const [roupas, setRoupas] = useState([]);
   const [radios, setRadios] = useState([]);
   const [regras, setRegras] = useState([]);
   const [cargosCustom, setCargosCustom] = useState([]);
+  const [avisosGerais, setAvisosGerais] = useState([]);
+  const [pedidosUpgrade, setPedidosUpgrade] = useState([]);
+  const [autorizacoes, setAutorizacoes] = useState([]);
 
   // Estados de Moderação / Filtros / Seleção
   const [busca, setBusca] = useState('');
@@ -34,6 +40,9 @@ export default function App() {
   const [novaRoupa, setNovaRoupa] = useState({ nome: '', top: '', calcas: '', mascara: '', imagem: '' });
   const [novaRadio, setNovaRadio] = useState({ canal: '', freq: '' });
   const [novaRegra, setNovaRegra] = useState('');
+  const [novoAviso, setNovoAviso] = useState({ titulo: '', mensagem: '' });
+  const [novoPedidoUpgrade, setNovoPedidoUpgrade] = useState({ cargoDesejado: '', motivo: '' });
+  const [novoPedidoAuth, setNovoPedidoAuth] = useState({ tipo: 'Autorização P/ Calças', motivo: '' });
   const [novoCargoNome, setNovoCargoNome] = useState('');
   const [novaCategoriaCargo, setNovaCategoriaCargo] = useState('Cargos Administrativos e Staff');
 
@@ -65,6 +74,16 @@ export default function App() {
 
   const cargosDisponiveis = categoriasCargos.flatMap(cat => cat.cargos);
 
+  const getCargoColorStyle = (cargo) => {
+    const c = cargo.toLowerCase();
+    if (c.includes('owner') || c.includes('founder') || c.includes('magnata')) return 'bg-purple-950/80 text-purple-300 border-purple-800';
+    if (c.includes('staff') || c.includes('manager') || c.includes('suport')) return 'bg-blue-950/80 text-blue-300 border-blue-800';
+    if (c.includes('booster') || c.includes('streamer') || c.includes('friend')) return 'bg-pink-950/80 text-pink-300 border-pink-800';
+    if (c.includes('warning') || c.includes('ban') || c.includes('muted')) return 'bg-red-950/80 text-red-300 border-red-800';
+    if (c.includes('member') || c.includes('player') || c.includes('homem') || c.includes('mulher')) return 'bg-emerald-950/80 text-emerald-300 border-emerald-800';
+    return 'bg-amber-950/80 text-amber-300 border-amber-800';
+  };
+
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -79,6 +98,7 @@ export default function App() {
               data.roles = ['01 Visitant'];
             }
             setUserData(data);
+            setPerfilEdit({ fotoPerfil: data.fotoPerfil || '', bio: data.bio || '' });
           } else {
             const defaultData = { 
               uid: currentUser.uid,
@@ -89,10 +109,12 @@ export default function App() {
               role: '01 Visitant',
               auditLog: [],
               notasInternas: '',
-              fotoPerfil: currentUser.photoURL || ''
+              fotoPerfil: currentUser.photoURL || '',
+              bio: 'Membro oficial da Magnatas 01!'
             };
             setDoc(userRef, defaultData, { merge: true });
             setUserData(defaultData);
+            setPerfilEdit({ fotoPerfil: defaultData.fotoPerfil, bio: defaultData.bio });
           }
           setLoading(false);
         });
@@ -144,6 +166,21 @@ export default function App() {
       const cargosList = [];
       cargosSnap.forEach(d => cargosList.push({ id: d.id, ...d.data() }));
       setCargosCustom(cargosList);
+
+      const avisosSnap = await getDocs(query(collection(db, 'avisosGerais')));
+      const avisosList = [];
+      avisosSnap.forEach(d => avisosList.push({ id: d.id, ...d.data() }));
+      setAvisosGerais(avisosList);
+
+      const upgradeSnap = await getDocs(query(collection(db, 'pedidosUpgrade')));
+      const upgradeList = [];
+      upgradeSnap.forEach(d => upgradeList.push({ id: d.id, ...d.data() }));
+      setPedidosUpgrade(upgradeList);
+
+      const authSnap = await getDocs(query(collection(db, 'autorizacoes')));
+      const authList = [];
+      authSnap.forEach(d => authList.push({ id: d.id, ...d.data() }));
+      setAutorizacoes(authList);
     } catch (e) {
       console.error("Erro ao carregar dados do Firestore:", e);
     }
@@ -189,6 +226,73 @@ export default function App() {
     };
     await setDoc(userRef, payload, { merge: true });
     setUserData(payload);
+    setPerfilEdit({ fotoPerfil: formData.fotoPerfil, bio: formData.bio });
+  };
+
+  const guardarPerfilPessoal = async (e) => {
+    e.preventDefault();
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, { fotoPerfil: perfilEdit.fotoPerfil, bio: perfilEdit.bio });
+    setUserData(prev => ({ ...prev, ...perfilEdit }));
+    carregarDadosGang();
+    alert("Perfil atualizado com sucesso!");
+  };
+
+  // Funções de Gestão de Avisos e Pedidos
+  const publicarAvisoGeral = async (e) => {
+    e.preventDefault();
+    if (!novoAviso.titulo || !novoAviso.mensagem) return;
+    await addDoc(collection(db, 'avisosGerais'), {
+      ...novoAviso,
+      autor: userData?.nomeIngame || userData?.nome || 'Admin',
+      data: new Date().toLocaleString('pt-PT')
+    });
+    setNovoAviso({ titulo: '', mensagem: '' });
+    carregarDadosGang();
+  };
+
+  const apagarAvisoGeral = async (id) => {
+    await deleteDoc(doc(db, 'avisosGerais', id));
+    carregarDadosGang();
+  };
+
+  const submeterPedidoUpgrade = async (e) => {
+    e.preventDefault();
+    await addDoc(collection(db, 'pedidosUpgrade'), {
+      uid: user.uid,
+      membro: userData?.nomeIngame || userData?.nome,
+      ...novoPedidoUpgrade,
+      status: 'pendente',
+      data: new Date().toLocaleString('pt-PT')
+    });
+    setNovoPedidoUpgrade({ cargoDesejado: '', motivo: '' });
+    carregarDadosGang();
+    alert("Pedido de upgrade submetido com sucesso!");
+  };
+
+  const atualizarStatusUpgrade = async (id, novoStatus) => {
+    await updateDoc(doc(db, 'pedidosUpgrade', id), { status: novoStatus });
+    carregarDadosGang();
+  };
+
+  const submeterPedidoAutorizacao = async (e) => {
+    e.preventDefault();
+    await addDoc(collection(db, 'autorizacoes'), {
+      uid: user.uid,
+      membro: userData?.nomeIngame || userData?.nome,
+      ...novoPedidoAuth,
+      status: 'pendente',
+      data: new Date().toLocaleString('pt-PT')
+    });
+    setNovoPedidoAuth({ tipo: 'Autorização P/ Calças', motivo: '' });
+    carregarDadosGang();
+    alert("Solicitação enviada com sucesso!");
+  };
+
+  const atualizarStatusAutorizacao = async (id, novoStatus) => {
+    await updateDoc(doc(db, 'autorizacoes', id), { status: novoStatus });
+    carregarDadosGang();
   };
 
   const atualizarStatusCandidato = async (targetUid, novoStatus, novosCargos = ['01 Member´s']) => {
@@ -273,7 +377,6 @@ export default function App() {
     downloadAnchor.remove();
   };
 
-  // Moderação
   const adicionarRoupa = async (e) => {
     e.preventDefault();
     await addDoc(collection(db, 'roupas'), novaRoupa);
@@ -363,7 +466,8 @@ export default function App() {
             </div>
             <div><label className="text-xs text-neutral-400 font-bold">5. QUANTO TEMPO DE CIDADE?</label><input required type="text" value={formData.tempoCidade} onChange={e => setFormData({...formData, tempoCidade: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
             <div><label className="text-xs text-neutral-400 font-bold">6. LINK DA FOTO DE PERFIL / IN-GAME (URL)</label><input required type="text" placeholder="https://exemplo.com/foto.jpg" value={formData.fotoPerfil} onChange={e => setFormData({...formData, fotoPerfil: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
-            <div><label className="text-xs text-neutral-400 font-bold">7. MOTIVO PARA ENTRAR NA GANG?</label><textarea required rows="3" value={formData.motivo} onChange={e => setFormData({...formData, motivo: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none"></textarea></div>
+            <div><label className="text-xs text-neutral-400 font-bold">7. BIOGRAFIA / BREVE DESCRIÇÃO</label><input required type="text" placeholder="Ex: Operacional focado em assaltos..." value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
+            <div><label className="text-xs text-neutral-400 font-bold">8. MOTIVO PARA ENTRAR NA GANG?</label><textarea required rows="3" value={formData.motivo} onChange={e => setFormData({...formData, motivo: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none"></textarea></div>
             <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2"><Send className="w-5 h-5"/><span>Submeter Candidatura</span></button>
           </form>
         </div>
@@ -402,6 +506,7 @@ export default function App() {
   const userRoles = userData?.roles || (userData?.role ? [userData.role] : []);
   const isFounder = userRoles.some(r => ['Owner', '| Magnata 01! ©', '01 Founder´s', 'Founder'].includes(r));
   const isSuportOrAdmin = isFounder || userRoles.some(r => ['Suport', 'Staff ATHOS PvP', 'Resp. Manager´s', 'Manager´s Approval'].includes(r));
+  const isAdmOrFounder = isFounder || userRoles.some(r => ['Staff ATHOS PvP', 'Resp. Manager´s'].includes(r));
 
   // Filtro avançado
   const membrosFiltrados = allUsers.filter(u => {
@@ -440,9 +545,9 @@ export default function App() {
             {darkMode ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
           </button>
 
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 max-w-xl">
             {userRoles.map((r, i) => (
-              <span key={i} className={`border px-2.5 py-1 rounded-full text-xs font-bold uppercase ${darkMode ? 'bg-red-950/60 border-red-900/50 text-neutral-200' : 'bg-red-100 border-red-300 text-red-800'}`}>{r}</span>
+              <span key={i} className={`border px-2.5 py-1 rounded-full text-xs font-bold uppercase ${getCargoColorStyle(r)}`}>{r}</span>
             ))}
           </div>
           <button onClick={handleLogout} className={`transition ${darkMode ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-black'}`} title="Sair"><LogOut className="w-5 h-5"/></button>
@@ -453,10 +558,16 @@ export default function App() {
         {/* SIDEBAR */}
         <aside className={`w-64 border-r p-4 space-y-2 transition-colors duration-300 ${darkMode ? 'border-neutral-800 bg-neutral-900/30' : 'border-neutral-300 bg-white shadow-inner'}`}>
           <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'dashboard' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Users className="w-5 h-5" /><span>Base da Gang</span></button>
+          <button onClick={() => setActiveTab('avisos_gerais')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'avisos_gerais' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Bell className="w-5 h-5" /><span>Avisos Gerais da Gang</span></button>
           <button onClick={() => setActiveTab('roupas')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'roupas' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Shirt className="w-5 h-5" /><span>Roupas & Kits</span></button>
           <button onClick={() => setActiveTab('radio')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'radio' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Radio className="w-5 h-5" /><span>Frequências Rádio</span></button>
           <button onClick={() => setActiveTab('regras')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'regras' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><BookOpen className="w-5 h-5" /><span>Regras Oficiais</span></button>
           <button onClick={() => setActiveTab('cargos')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'cargos' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Award className="w-5 h-5" /><span>Lista de Cargos</span></button>
+          <button onClick={() => setActiveTab('pedir_upgrade')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'pedir_upgrade' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Award className="w-5 h-5" /><span>Pedir Upgrade / Promoção</span></button>
+          <button onClick={() => setActiveTab('autorizacoes')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'autorizacoes' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Shirt className="w-5 h-5" /><span>Autorizações (Calças/Manga)</span></button>
+          <button onClick={() => setActiveTab('avisos_pessoais')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'avisos_pessoais' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><ShieldAlert className="w-5 h-5" /><span>Meus Avisos / Punições</span></button>
+          <button onClick={() => setActiveTab('discord')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'discord' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><MessageSquare className="w-5 h-5" /><span>Discord da Gang</span></button>
+          <button onClick={() => setActiveTab('perfil')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'perfil' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><User className="w-5 h-5" /><span>Meu Perfil</span></button>
           
           {isSuportOrAdmin && (
             <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'admin' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/30' : darkMode ? 'hover:bg-neutral-800 text-amber-500' : 'hover:bg-neutral-200 text-amber-600'}`}><Settings className="w-5 h-5" /><span>Painel Admin & Suporte</span></button>
@@ -490,6 +601,7 @@ export default function App() {
                         <h4 className={`font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{m.nomeIngame || 'Membro'}</h4>
                         <p className="text-xs text-amber-500 font-semibold">{m.roles?.[0] || 'Membro'}</p>
                         <p className="text-xs text-neutral-500">ID: {m.idIngame || 'N/A'}</p>
+                        {m.bio && <p className="text-[11px] text-neutral-400 italic mt-1">"{m.bio}"</p>}
                       </div>
                     </div>
                   ))}
@@ -513,8 +625,9 @@ export default function App() {
                       <div>
                         <h4 className={`font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{m.nomeIngame || 'Membro'}</h4>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {m.roles?.map((r, idx) => <span key={idx} className="text-[10px] bg-red-950 text-red-400 border border-red-900 px-1.5 py-0.5 rounded-md font-semibold">{r}</span>)}
+                          {m.roles?.map((r, idx) => <span key={idx} className={`text-[10px] border px-1.5 py-0.5 rounded-md font-semibold ${getCargoColorStyle(r)}`}>{r}</span>)}
                         </div>
+                        {m.bio && <p className="text-[11px] text-neutral-400 italic mt-1">"{m.bio}"</p>}
                       </div>
                     </div>
                   ))}
@@ -535,58 +648,226 @@ export default function App() {
                       <div>
                         <h4 className={`font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{m.nomeIngame || 'Membro'}</h4>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {m.roles?.map((r, idx) => <span key={idx} className="text-[10px] bg-neutral-800 text-emerald-400 border border-neutral-700 px-1.5 py-0.5 rounded-md font-semibold">{r}</span>)}
+                          {m.roles?.map((r, idx) => <span key={idx} className={`text-[10px] border px-1.5 py-0.5 rounded-md font-semibold ${getCargoColorStyle(r)}`}>{r}</span>)}
                         </div>
+                        {m.bio && <p className="text-[11px] text-neutral-400 italic mt-1">"{m.bio}"</p>}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Ausentes */}
+          {activeTab === 'avisos_gerais' && (
+            <div className="space-y-6">
+              <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>AVISOS GERAIS DA GANG</h2>
+              
+              {isAdmOrFounder && (
+                <div className={`border rounded-2xl p-6 space-y-4 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                  <h3 className="text-lg font-bold text-red-500">Publicar Novo Aviso Oficial</h3>
+                  <form onSubmit={publicarAvisoGeral} className="space-y-3">
+                    <input required type="text" placeholder="Título do Aviso..." value={novoAviso.titulo} onChange={e => setNovoAviso({...novoAviso, titulo: e.target.value})} className={`w-full border rounded-lg p-3 text-sm outline-none ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} />
+                    <textarea required rows="3" placeholder="Escreve aqui o comunicado oficial para a gang..." value={novoAviso.mensagem} onChange={e => setNovoAviso({...novoAviso, mensagem: e.target.value})} className={`w-full border rounded-lg p-3 text-sm outline-none ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`}></textarea>
+                    <button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm flex items-center space-x-2"><Bell className="w-4 h-4"/><span>Publicar Aviso</span></button>
+                  </form>
+                </div>
+              )}
+
               <div className="space-y-4">
-                <h3 className="text-xl font-bold text-amber-500 flex items-center space-x-2 border-b border-neutral-800 pb-2">
-                  <AlertCircle className="w-5 h-5 text-amber-500" />
-                  <span>Membros em Ausência</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {allUsers.filter(u => u.roles?.includes('Ausente')).map(m => (
-                    <div key={m.uid} className={`border p-4 rounded-xl flex items-center space-x-4 transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-amber-900/30' : 'bg-white border-amber-200 shadow-sm'}`}>
-                      {m.fotoPerfil ? (
-                        <img src={m.fotoPerfil} alt={m.nomeIngame} className="w-12 h-12 rounded-full object-cover border border-amber-600" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-amber-950 flex items-center justify-center font-bold text-amber-500 uppercase">{m.nomeIngame?.[0]}</div>
-                      )}
-                      <div>
-                        <h4 className={`font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{m.nomeIngame || 'Membro'}</h4>
-                        <span className="text-xs text-amber-500 font-bold">Ausente do Servidor</span>
+                {avisosGerais.map(aviso => (
+                  <div key={aviso.id} className={`border rounded-2xl p-6 space-y-3 relative shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                    {isAdmOrFounder && (
+                      <button onClick={() => apagarAvisoGeral(aviso.id)} className="absolute top-4 right-4 text-neutral-500 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                    )}
+                    <div className="flex justify-between items-center border-b pb-2 border-neutral-800">
+                      <h3 className="text-lg font-bold text-red-500">{aviso.titulo}</h3>
+                      <span className="text-xs text-neutral-500 font-mono">{aviso.data} • Por: <strong className="text-white">{aviso.autor}</strong></span>
+                    </div>
+                    <p className={`text-sm ${darkMode ? 'text-neutral-300' : 'text-neutral-700'}`}>{aviso.mensagem}</p>
+                  </div>
+                ))}
+                {avisosGerais.length === 0 && (
+                  <p className="text-xs text-neutral-500 italic">Nenhum aviso geral publicado de momento.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'pedir_upgrade' && (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>SOLICITAR UPGRADE / PROMOÇÃO</h2>
+              <div className={`border rounded-2xl p-6 space-y-6 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                <form onSubmit={submeterPedidoUpgrade} className="space-y-4">
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold">Cargo Desejado</label>
+                    <select value={novoPedidoUpgrade.cargoDesejado} onChange={e => setNovoPedidoUpgrade({...novoPedidoUpgrade, cargoDesejado: e.target.value})} className={`w-full border rounded-lg p-3 text-sm outline-none mt-1 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`}>
+                      <option value="">Seleciona o cargo pretendido...</option>
+                      {cargosDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold">Por que acreditas que deves subir de cargo?</label>
+                    <textarea required rows="4" value={novoPedidoUpgrade.motivo} onChange={e => setNovoPedidoUpgrade({...novoPedidoUpgrade, motivo: e.target.value})} placeholder="Descreve as tuas contribuições e méritos na gang..." className={`w-full border rounded-lg p-3 text-sm outline-none mt-1 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`}></textarea>
+                  </div>
+                  <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2">
+                    <Award className="w-5 h-5"/><span>Enviar Pedido de Promoção</span>
+                  </button>
+                </form>
+
+                {/* Lista de Pedidos do Próprio / Staff */}
+                <div className="space-y-3 pt-4 border-t border-neutral-800">
+                  <h3 className="text-sm font-bold text-white">Os Teus Pedidos Recentes</h3>
+                  {pedidosUpgrade.filter(p => isFounder || p.uid === user.uid).map(ped => (
+                    <div key={ped.id} className={`border p-4 rounded-xl space-y-2 ${darkMode ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-red-500 text-sm">{ped.membro} ➔ {ped.cargoDesejado}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ped.status === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : ped.status === 'reprovado' ? 'bg-red-950 text-red-400' : 'bg-amber-950 text-amber-400'}`}>{ped.status}</span>
                       </div>
+                      <p className="text-xs text-neutral-300">"{ped.motivo}"</p>
+                      {isFounder && ped.status === 'pendente' && (
+                        <div className="flex space-x-2 pt-2">
+                          <button onClick={() => atualizarStatusUpgrade(ped.id, 'aprovado')} className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">Aprovar</button>
+                          <button onClick={() => atualizarStatusUpgrade(ped.id, 'reprovado')} className="bg-red-600 text-white px-3 py-1 rounded text-xs font-bold">Reprovar</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Banidos */}
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold text-red-600 flex items-center space-x-2 border-b border-neutral-800 pb-2">
-                  <UserX className="w-5 h-5 text-red-600" />
-                  <span>Membros Banidos</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {allUsers.filter(u => u.roles?.some(r => ['Ban Temporário', 'Ban Perma'].includes(r))).map(m => (
-                    <div key={m.uid} className={`border p-4 rounded-xl flex items-center space-x-4 transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-red-950' : 'bg-white border-red-200 shadow-sm'}`}>
-                      {m.fotoPerfil ? (
-                        <img src={m.fotoPerfil} alt={m.nomeIngame} className="w-12 h-12 rounded-full object-cover border border-red-600" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-red-950 flex items-center justify-center font-bold text-red-600 uppercase">{m.nomeIngame?.[0]}</div>
-                      )}
-                      <div>
-                        <h4 className={`font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{m.nomeIngame || 'Membro'}</h4>
-                        <span className="text-xs text-red-600 font-bold">{m.roles?.filter(r => r.includes('Ban')).join(', ')}</span>
+          {activeTab === 'autorizacoes' && (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>SOLICITAR AUTORIZAÇÕES (CALÇAS / MANGA)</h2>
+              <div className={`border rounded-2xl p-6 space-y-6 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                <form onSubmit={submeterPedidoAutorizacao} className="space-y-4">
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold">Tipo de Autorização</label>
+                    <select value={novoPedidoAuth.tipo} onChange={e => setNovoPedidoAuth({...novoPedidoAuth, tipo: e.target.value})} className={`w-full border rounded-lg p-3 text-sm outline-none mt-1 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`}>
+                      <option value="Autorização P/ Calças">Autorização P/ Calças</option>
+                      <option value="Autorização P/ Manga">Autorização P/ Manga</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold">Motivo / Justificação</label>
+                    <textarea required rows="3" value={novoPedidoAuth.motivo} onChange={e => setNovoPedidoAuth({...novoPedidoAuth, motivo: e.target.value})} placeholder="Explica o motivo da solicitação..." className={`w-full border rounded-lg p-3 text-sm outline-none mt-1 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`}></textarea>
+                  </div>
+                  <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2">
+                    <Shirt className="w-5 h-5"/><span>Solicitar Autorização</span>
+                  </button>
+                </form>
+
+                <div className="space-y-3 pt-4 border-t border-neutral-800">
+                  <h3 className="text-sm font-bold text-white">Estado das Autorizações</h3>
+                  {autorizacoes.filter(a => isFounder || a.uid === user.uid).map(auth => (
+                    <div key={auth.id} className={`border p-4 rounded-xl space-y-2 ${darkMode ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-amber-400 text-sm">{auth.membro} ➔ {auth.tipo}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${auth.status === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : auth.status === 'reprovado' ? 'bg-red-950 text-red-400' : 'bg-amber-950 text-amber-400'}`}>{auth.status}</span>
                       </div>
+                      <p className="text-xs text-neutral-300">"{auth.motivo}"</p>
+                      {isFounder && auth.status === 'pendente' && (
+                        <div className="flex space-x-2 pt-2">
+                          <button onClick={() => atualizarStatusAutorizacao(auth.id, 'aprovado')} className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">Aprovar</button>
+                          <button onClick={() => atualizarStatusAutorizacao(auth.id, 'reprovado')} className="bg-red-600 text-white px-3 py-1 rounded text-xs font-bold">Reprovar</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'avisos_pessoais' && (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>MEUS AVISOS E PUNIÇÕES</h2>
+              <div className={`border rounded-2xl p-6 space-y-4 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                <div className="flex items-center space-x-3 border-b border-neutral-800 pb-4">
+                  <ShieldAlert className="w-8 h-8 text-red-600 animate-pulse" />
+                  <div>
+                    <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{userData?.nomeIngame}</h3>
+                    <p className="text-xs text-neutral-500">Estado de Punições Ativo</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-neutral-400">Cargos de Punição / Advertências Atribuídas:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {userData?.roles?.filter(r => r.includes('Warning') || r.includes('Ban') || r.includes('Muted')).map((p, i) => (
+                      <span key={i} className="bg-red-950 border border-red-800 text-red-400 px-3 py-1.5 rounded-xl text-xs font-bold">
+                        ⚠️ {p}
+                      </span>
+                    ))}
+                    {(!userData?.roles || !userData.roles.some(r => r.includes('Warning') || r.includes('Ban') || r.includes('Muted'))) && (
+                      <p className="text-xs text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-900 p-3 rounded-xl w-full">
+                        ✅ Parabéns! Não tens nenhuma advertência ou punição registada na tua ficha.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'discord' && (
+            <div className="space-y-6 max-w-xl mx-auto text-center py-10">
+              <div className={`border rounded-2xl p-8 space-y-6 shadow-xl ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                <MessageSquare className="w-16 h-16 text-indigo-500 mx-auto animate-bounce" />
+                <h2 className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>DISCORD OFICIAL MAGNATAS 01!</h2>
+                <p className="text-neutral-400 text-sm">Entra no nosso servidor de Discord para comunicados em tempo real, calls de assalto e suporte direto com a liderança.</p>
+                <a href="https://discord.com" target="_blank" rel="noreferrer" className="inline-flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg">
+                  <MessageSquare className="w-5 h-5"/><span>Entrar no Servidor do Discord</span>
+                </a>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'perfil' && (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>GERIR MEU PERFIL</h2>
+              <div className={`border rounded-2xl p-6 space-y-6 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                <div className="flex items-center space-x-4">
+                  {perfilEdit.fotoPerfil ? (
+                    <img src={perfilEdit.fotoPerfil} alt="Avatar" className="w-20 h-20 rounded-full object-cover border-2 border-red-600 shadow" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-red-950 border-2 border-red-600 flex items-center justify-center font-bold text-xl text-red-500 uppercase">
+                      {userData?.nomeIngame?.[0] || 'M'}
+                    </div>
+                  )}
+                  <div>
+                    <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{userData?.nomeIngame || 'Membro'}</h3>
+                    <p className="text-xs text-neutral-500">ID In-Game: {userData?.idIngame || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <form onSubmit={guardarPerfilPessoal} className="space-y-4">
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold">Link da Foto de Perfil (URL)</label>
+                    <input 
+                      type="text" 
+                      value={perfilEdit.fotoPerfil} 
+                      onChange={e => setPerfilEdit({...perfilEdit, fotoPerfil: e.target.value})} 
+                      placeholder="https://exemplo.com/foto.jpg" 
+                      className={`w-full border rounded-lg p-3 text-sm outline-none mt-1 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold">Biografia / Descrição do Personagem</label>
+                    <textarea 
+                      rows="3" 
+                      value={perfilEdit.bio} 
+                      onChange={e => setPerfilEdit({...perfilEdit, bio: e.target.value})} 
+                      placeholder="Conta um pouco sobre ti na cidade..." 
+                      className={`w-full border rounded-lg p-3 text-sm outline-none mt-1 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`}
+                    ></textarea>
+                  </div>
+                  <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2">
+                    <User className="w-5 h-5"/><span>Guardar Alterações do Perfil</span>
+                  </button>
+                </form>
               </div>
             </div>
           )}
@@ -716,7 +997,7 @@ export default function App() {
                       {cat.cargos.map((c, j) => {
                         const customObj = cargosCustom.find(item => item.nome === c);
                         return (
-                          <div key={j} className={`border px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-2 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-neutral-200' : 'bg-neutral-100 border-neutral-300 text-neutral-800'}`}>
+                          <div key={j} className={`border px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-2 ${getCargoColorStyle(c)}`}>
                             <span>{c}</span>
                             {isFounder && customObj && (
                               <button onClick={() => apagarCargoCustom(customObj.id)} className="text-neutral-500 hover:text-red-500 ml-1"><Trash2 className="w-3.5 h-3.5"/></button>
@@ -901,6 +1182,7 @@ export default function App() {
                 <div>
                   <h3 className="text-xl font-bold">{membroModalAudit.nomeIngame || 'Membro'}</h3>
                   <p className="text-xs text-neutral-400">Real: {membroModalAudit.nomeReal || membroModalAudit.email} • ID: {membroModalAudit.idIngame || 'N/A'}</p>
+                  {membroModalAudit.bio && <p className="text-xs text-amber-400 italic mt-1">"{membroModalAudit.bio}"</p>}
                 </div>
               </div>
               <button onClick={() => setMembroModalAudit(null)} className="text-neutral-500 hover:text-white"><XCircle className="w-6 h-6"/></button>
