@@ -4,8 +4,8 @@ import {
   Clock, CheckCircle, XCircle, Shirt, Radio, BookOpen, Settings, Send
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -13,7 +13,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Form State
   const [formData, setFormData] = useState({
     idade: '',
     nomeIngame: '',
@@ -23,12 +22,13 @@ export default function App() {
     motivo: ''
   });
 
-  // Monitorar Autenticação e Firestore
   useEffect(() => {
+    // Processar o resultado do redirecionamento após o login
+    getRedirectResult(auth).catch((error) => console.error("Erro no login:", error));
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Escutar alterações do utilizador no Firestore
         const userRef = doc(db, 'users', currentUser.uid);
         const unsubscribeDoc = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
@@ -48,21 +48,18 @@ export default function App() {
     return () => unsubscribeAuth();
   }, []);
 
-  // Login com Google
   const handleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithRedirect(auth, googleProvider);
     } catch (error) {
       console.error("Erro ao iniciar sessão:", error);
     }
   };
 
-  // Logout
   const handleLogout = async () => {
     await signOut(auth);
   };
 
-  // Submeter Candidatura
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     if (!user) return;
@@ -90,7 +87,6 @@ export default function App() {
     );
   }
 
-  // 1. ECRÃ DE LOGIN (Sem sessão)
   if (!user) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4">
@@ -111,7 +107,6 @@ export default function App() {
     );
   }
 
-  // 2. FORMULÁRIO DE CANDIDATURA (Sem candidatura)
   if (userData?.status === 'sem_candidatura') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white p-6 flex justify-center items-center">
@@ -157,7 +152,6 @@ export default function App() {
     );
   }
 
-  // 3. CANDIDATURA PENDENTE
   if (userData?.status === 'pendente') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
@@ -172,7 +166,6 @@ export default function App() {
     );
   }
 
-  // 4. CANDIDATURA REPROVADA
   if (userData?.status === 'reprovado') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
@@ -192,7 +185,6 @@ export default function App() {
     );
   }
 
-  // 5. PAINEL PRINCIPAL (Candidatura Aprovada)
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans">
       <header className="border-b border-red-900/40 bg-neutral-900/80 backdrop-blur px-6 py-4 flex items-center justify-between">
