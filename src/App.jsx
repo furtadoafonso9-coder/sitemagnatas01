@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, DollarSign, AlertTriangle, LogIn, LogOut, 
-  Clock, CheckCircle, XCircle, Shirt, Radio, BookOpen, Settings, Send
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
-import { signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export default function App() {
@@ -23,10 +22,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Processar o resultado do redirecionamento após o login
-    getRedirectResult(auth).catch((error) => console.error("Erro no login:", error));
-
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         const userRef = doc(db, 'users', currentUser.uid);
@@ -34,8 +30,14 @@ export default function App() {
           if (docSnap.exists()) {
             setUserData(docSnap.data());
           } else {
+            // Se o utilizador é novo e ainda não tem documento no Firestore
             setUserData({ status: 'sem_candidatura', role: 'Visitante' });
           }
+          setLoading(false);
+        }, (error) => {
+          console.error("Erro no Firestore:", error);
+          // Fallback em caso de erro de permissão
+          setUserData({ status: 'sem_candidatura', role: 'Visitante' });
           setLoading(false);
         });
         return () => unsubscribeDoc();
@@ -50,7 +52,7 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
     } catch (error) {
       console.error("Erro ao iniciar sessão:", error);
     }
@@ -64,19 +66,23 @@ export default function App() {
     e.preventDefault();
     if (!user) return;
 
-    const userRef = doc(db, 'users', user.uid);
-    const payload = {
-      uid: user.uid,
-      email: user.email,
-      nome: user.displayName,
-      foto: user.photoURL,
-      ...formData,
-      status: 'pendente',
-      role: 'Visitante',
-      dataSubmissao: new Date().toISOString()
-    };
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const payload = {
+        uid: user.uid,
+        email: user.email,
+        nome: user.displayName,
+        foto: user.photoURL,
+        ...formData,
+        status: 'pendente',
+        role: 'Visitante',
+        dataSubmissao: new Date().toISOString()
+      };
 
-    await setDoc(userRef, payload, { merge: true });
+      await setDoc(userRef, payload, { merge: true });
+    } catch (error) {
+      console.error("Erro ao submeter candidatura:", error);
+    }
   };
 
   if (loading) {
@@ -87,6 +93,7 @@ export default function App() {
     );
   }
 
+  // 1. ECRÃ DE LOGIN
   if (!user) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4">
@@ -107,7 +114,8 @@ export default function App() {
     );
   }
 
-  if (userData?.status === 'sem_candidatura') {
+  // 2. FORMULÁRIO DE CANDIDATURA
+  if (!userData || userData.status === 'sem_candidatura') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white p-6 flex justify-center items-center">
         <div className="max-w-2xl w-full bg-neutral-900 border border-neutral-800 p-8 rounded-2xl space-y-6">
@@ -152,6 +160,7 @@ export default function App() {
     );
   }
 
+  // 3. CANDIDATURA PENDENTE
   if (userData?.status === 'pendente') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
@@ -166,6 +175,7 @@ export default function App() {
     );
   }
 
+  // 4. CANDIDATURA REPROVADA
   if (userData?.status === 'reprovado') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
@@ -185,6 +195,7 @@ export default function App() {
     );
   }
 
+  // 5. PAINEL PRINCIPAL (Aprovado)
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans">
       <header className="border-b border-red-900/40 bg-neutral-900/80 backdrop-blur px-6 py-4 flex items-center justify-between">
