@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -21,29 +21,19 @@ export default function App() {
   const [regras, setRegras] = useState([]);
 
   // Estados para inputs de moderação
-  const [novaRoupa, setNovaRoupa] = useState({ nome: '', top: '', calcas: '', mascara: '' });
+  const [novaRoupa, setNovaRoupa] = useState({ nome: '', top: '', calcas: '', mascara: '', imagem: '' });
   const [novaRegra, setNovaRegra] = useState('');
 
-  // Lista integral de cargos organizados
-  const cargosDisponiveis = [
-    // Cargos Administrativos e Staff
-    "Staff ATHOS PvP", "01 Founder´s", "01 Leader´s", "| Magnata 01! ©",
-    "Resp. Manager´s", "01 Manager´s", "Suport", "Manager´s Approval", "Resp. Member´s",
-    
-    // Membros e Comunidade
-    "01 Member´s", "Server Booster´s", "01 Friend´s", "01 Visitant",
-    "PVP Player", "Homem", "Mulher",
-    
-    // Cargos de Moderação e Punições
-    "Ban Temporário", "Ban Perma", "Muted", "Ausente",
-    "Warning 1", "Warning 2", "Warning AFK",
-    
-    // Bots e Integrações
-    "Streamer",
-    
-    // Outros / Autorizações
-    "Conta ALT", "Autorização P/ Calças", "Autorização P/ Manga"
+  // Lista integral de cargos organizados por categorias para a aba de cargos
+  const categoriasCargos = [
+    { categoria: "Cargos Administrativos e Staff", cargos: ["Staff ATHOS PvP", "01 Founder´s", "01 Leader´s", "| Magnata 01! ©", "Resp. Manager´s", "01 Manager´s", "Suport", "Manager´s Approval", "Resp. Member´s"] },
+    { categoria: "Membros e Comunidade", cargos: ["01 Member´s", "Server Booster´s", "01 Friend´s", "01 Visitant", "PVP Player", "Homem", "Mulher"] },
+    { categoria: "Cargos de Moderação e Punições", cargos: ["Ban Temporário", "Ban Perma", "Muted", "Ausente", "Warning 1", "Warning 2", "Warning AFK"] },
+    { categoria: "Bots e Integrações", cargos: ["Streamer"] },
+    { categoria: "Outros / Autorizações", cargos: ["Conta ALT", "Autorização P/ Calças", "Autorização P/ Manga"] }
   ];
+
+  const cargosDisponiveis = categoriasCargos.flatMap(cat => cat.cargos);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -72,51 +62,29 @@ export default function App() {
   }, []);
 
   const carregarDadosGang = async () => {
-    // Utilizadores
-    const usersSnap = await getDocs(query(collection(db, 'users')));
-    const usersList = [];
-    usersSnap.forEach((d) => usersList.push({ id: d.id, ...d.data() }));
-    setAllUsers(usersList);
+    try {
+      const usersSnap = await getDocs(query(collection(db, 'users')));
+      const usersList = [];
+      usersSnap.forEach((d) => usersList.push({ id: d.id, ...d.data() }));
+      setAllUsers(usersList);
 
-    // Roupas
-    const roupasSnap = await getDocs(query(collection(db, 'roupas')));
-    if (roupasSnap.empty) {
-      const defaultRoupas = [
-        { nome: 'Kit Assalto / Operacional', top: 'ID 142', calcas: 'ID 35', mascara: 'ID 22' },
-        { nome: 'Kit Reunião / Conferência', top: 'ID 88', calcas: 'ID 12', mascara: 'Nenhuma' }
-      ];
-      defaultRoupas.forEach(async r => await addDoc(collection(db, 'roupas'), r));
-    }
-    const roupasList = [];
-    roupasSnap.forEach(d => roupasList.push({ id: d.id, ...d.data() }));
-    setRoupas(roupasList);
+      const roupasSnap = await getDocs(query(collection(db, 'roupas')));
+      const roupasList = [];
+      roupasSnap.forEach(d => roupasList.push({ id: d.id, ...d.data() }));
+      setRoupas(roupasList);
 
-    // Rádios
-    const radiosSnap = await getDocs(query(collection(db, 'radios')));
-    if (radiosSnap.empty) {
-      const defaultRadios = [
-        { canal: 'Rádio Principal (Geral)', freq: '101.5 MHz' },
-        { canal: 'Rádio Alternativa (Ações)', freq: '202.0 MHz' }
-      ];
-      defaultRadios.forEach(async r => await addDoc(collection(db, 'radios'), r));
-    }
-    const radiosList = [];
-    radiosSnap.forEach(d => radiosList.push({ id: d.id, ...d.data() }));
-    setRadios(radiosList);
+      const radiosSnap = await getDocs(query(collection(db, 'radios')));
+      const radiosList = [];
+      radiosSnap.forEach(d => radiosList.push({ id: d.id, ...d.data() }));
+      setRadios(radiosList);
 
-    // Regras
-    const regrasSnap = await getDocs(query(collection(db, 'regras')));
-    if (regrasSnap.empty) {
-      const defaultRegras = [
-        'Respeito máximo por todos os membros, independentemente do cargo.',
-        'Proibido toxicidade em calls públicas ou com outras organizações.',
-        'Uso obrigatório da farda estipulada nas ações oficiais da Magnatas 01!'
-      ];
-      defaultRegras.forEach(async r => await addDoc(collection(db, 'regras'), { texto: r }));
+      const regrasSnap = await getDocs(query(collection(db, 'regras')));
+      const regrasList = [];
+      regrasSnap.forEach(d => regrasList.push({ id: d.id, ...d.data() }));
+      setRegras(regrasList);
+    } catch (e) {
+      console.error("Erro ao carregar dados do Firestore:", e);
     }
-    const regrasList = [];
-    regrasSnap.forEach(d => regrasList.push({ id: d.id, ...d.data() }));
-    setRegras(regrasList);
   };
 
   const handleLogin = async () => {
@@ -164,7 +132,7 @@ export default function App() {
   const adicionarRoupa = async (e) => {
     e.preventDefault();
     await addDoc(collection(db, 'roupas'), novaRoupa);
-    setNovaRoupa({ nome: '', top: '', calcas: '', mascara: '' });
+    setNovaRoupa({ nome: '', top: '', calcas: '', mascara: '', imagem: '' });
     carregarDadosGang();
   };
 
@@ -193,7 +161,6 @@ export default function App() {
     );
   }
 
-  // 1. Ecrã de Login
   if (!user) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center p-4">
@@ -209,13 +176,12 @@ export default function App() {
     );
   }
 
-  // 2. Formulário de Candidatura
   if (!userData || userData.status === 'sem_candidatura') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white p-6 flex justify-center items-center">
         <div className="max-w-2xl w-full bg-neutral-900 border border-neutral-800 p-8 rounded-2xl space-y-6 shadow-2xl">
           <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
-            <h1 className="text-2xl font-black text-red-600">FORMULÁRIO DE CANDIDATURA — MAGNATAS 01!</h1>
+            <h1 className="text-2xl font-black text-red-600">FORMULÁRIO DE CANDIDATURA</h1>
             <button onClick={handleLogout} className="text-neutral-400 hover:text-white"><LogOut className="w-5 h-5"/></button>
           </div>
           <form onSubmit={handleSubmitCandidatura} className="space-y-4">
@@ -234,7 +200,6 @@ export default function App() {
     );
   }
 
-  // 3. Pendente
   if (userData?.status === 'pendente') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
@@ -242,14 +207,12 @@ export default function App() {
           <Clock className="w-16 h-16 text-amber-500 mx-auto animate-pulse" />
           <h1 className="text-2xl font-black text-white">MAGNATAS 01!</h1>
           <p className="text-amber-400 font-bold">A tua candidatura está pendente.</p>
-          <p className="text-neutral-400 text-sm">Aguarda que um responsável da gang analise a tua candidatura.</p>
           <button onClick={handleLogout} className="text-xs text-neutral-500 hover:text-white underline pt-4">Sair da Conta</button>
         </div>
       </div>
     );
   }
 
-  // 4. Reprovado
   if (userData?.status === 'reprovado') {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
@@ -265,7 +228,8 @@ export default function App() {
     );
   }
 
-  const isOwnerOrFounder = ['| Magnata 01! ©', '01 Founder´s', 'Founder', 'Owner', 'Suport', 'Staff ATHOS PvP'].includes(userData?.role);
+  // Permissão alargada para Owner, Founder, Staff e agora também para o cargo "Suport"
+  const hasAdminAccess = ['Owner', 'Suport', '| Magnata 01! ©', '01 Founder´s', 'Founder', 'Staff ATHOS PvP'].includes(userData?.role);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans">
@@ -289,9 +253,10 @@ export default function App() {
           <button onClick={() => setActiveTab('roupas')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'roupas' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'hover:bg-neutral-800 text-neutral-400'}`}><Shirt className="w-5 h-5" /><span>Roupas & Kits</span></button>
           <button onClick={() => setActiveTab('radio')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'radio' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'hover:bg-neutral-800 text-neutral-400'}`}><Radio className="w-5 h-5" /><span>Frequências Rádio</span></button>
           <button onClick={() => setActiveTab('regras')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'regras' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'hover:bg-neutral-800 text-neutral-400'}`}><BookOpen className="w-5 h-5" /><span>Regras Oficiais</span></button>
+          <button onClick={() => setActiveTab('cargos')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'cargos' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : 'hover:bg-neutral-800 text-neutral-400'}`}><Award className="w-5 h-5" /><span>Lista de Cargos</span></button>
           
-          {isOwnerOrFounder && (
-            <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'admin' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/30' : 'hover:bg-neutral-800 text-amber-500'}`}><Settings className="w-5 h-5" /><span>Painel Admin</span></button>
+          {hasAdminAccess && (
+            <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'admin' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/30' : 'hover:bg-neutral-800 text-amber-500'}`}><Settings className="w-5 h-5" /><span>Painel Admin & Suporte</span></button>
           )}
         </aside>
 
@@ -303,11 +268,10 @@ export default function App() {
                 <p className="text-neutral-400">Plataforma oficial operacional. Consulta abaixo a listagem de líderes, gerentes e membros ativos da crew.</p>
               </div>
 
-              {/* Listagem de Membros por Categoria */}
               <div className="space-y-6">
                 <h3 className="text-xl font-bold text-red-500 border-b border-neutral-800 pb-2">Líderes e Fundadores</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {allUsers.filter(u => ['| Magnata 01! ©', '01 Founder´s', '01 Leader´s'].includes(u.role)).map(m => (
+                  {allUsers.filter(u => ['Owner', 'Suport', '| Magnata 01! ©', '01 Founder´s', '01 Leader´s'].includes(u.role)).map(m => (
                     <div key={m.uid} className="bg-neutral-900 border border-neutral-800 p-4 rounded-xl flex items-center space-x-4">
                       <div className="w-12 h-12 rounded-full bg-red-950 border border-red-800 flex items-center justify-center font-bold text-red-500 uppercase">{m.nome?.[0]}</div>
                       <div>
@@ -321,7 +285,7 @@ export default function App() {
 
                 <h3 className="text-xl font-bold text-neutral-200 border-b border-neutral-800 pb-2 pt-4">Membros Ativos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {allUsers.filter(u => u.status === 'aprovado' && !['| Magnata 01! ©', '01 Founder´s', '01 Leader´s'].includes(u.role)).map(m => (
+                  {allUsers.filter(u => u.status === 'aprovado' && !['Owner', 'Suport', '| Magnata 01! ©', '01 Founder´s', '01 Leader´s'].includes(u.role)).map(m => (
                     <div key={m.uid} className="bg-neutral-900 border border-neutral-800 p-4 rounded-xl flex items-center space-x-4">
                       <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center font-bold text-white uppercase">{m.nome?.[0]}</div>
                       <div>
@@ -338,14 +302,15 @@ export default function App() {
 
           {activeTab === 'roupas' && (
             <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-black text-white">ROUPAS E UNIFORMES OFICIAIS</h2>
-              </div>
+              <h2 className="text-2xl font-black text-white">ROUPAS E UNIFORMES OFICIAIS</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {roupas.map(r => (
                   <div key={r.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-3 relative">
-                    {isOwnerOrFounder && (
+                    {hasAdminAccess && (
                       <button onClick={() => apagarRoupa(r.id)} className="absolute top-4 right-4 text-neutral-500 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                    )}
+                    {r.imagem && (
+                      <img src={r.imagem} alt={r.nome} className="w-full h-48 object-cover rounded-xl border border-neutral-800 mb-2" />
                     )}
                     <h3 className="text-lg font-bold text-red-500">{r.nome}</h3>
                     <div className="text-sm text-neutral-300 space-y-1">
@@ -357,15 +322,16 @@ export default function App() {
                 ))}
               </div>
 
-              {isOwnerOrFounder && (
+              {hasAdminAccess && (
                 <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 mt-6">
                   <h3 className="text-lg font-bold text-white mb-4">Adicionar Nova Roupa / Kit</h3>
-                  <form onSubmit={adicionarRoupa} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <form onSubmit={adicionarRoupa} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input required type="text" placeholder="Nome do Kit" value={novaRoupa.nome} onChange={e => setNovaRoupa({...novaRoupa, nome: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white text-sm outline-none" />
+                    <input required type="text" placeholder="Link da Imagem (URL da foto)" value={novaRoupa.imagem} onChange={e => setNovaRoupa({...novaRoupa, imagem: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white text-sm outline-none" />
                     <input required type="text" placeholder="Top (Ex: ID 142)" value={novaRoupa.top} onChange={e => setNovaRoupa({...novaRoupa, top: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white text-sm outline-none" />
                     <input required type="text" placeholder="Calças (Ex: ID 35)" value={novaRoupa.calcas} onChange={e => setNovaRoupa({...novaRoupa, calcas: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white text-sm outline-none" />
-                    <input required type="text" placeholder="Máscara (Ex: ID 22)" value={novaRoupa.mascara} onChange={e => setNovaRoupa({...novaRoupa, mascara: e.target.value})} className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white text-sm outline-none" />
-                    <button type="submit" className="md:col-span-4 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2"><Plus className="w-5 h-5"/><span>Guardar Roupa</span></button>
+                    <input required type="text" placeholder="Máscara (Ex: ID 22)" value={novaRoupa.mascara} onChange={e => setNovaRoupa({...novaRoupa, mascara: e.target.value})} className="md:col-span-2 bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white text-sm outline-none" />
+                    <button type="submit" className="md:col-span-2 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2"><Plus className="w-5 h-5"/><span>Guardar Roupa com Foto</span></button>
                   </form>
                 </div>
               )}
@@ -396,14 +362,14 @@ export default function App() {
                       <span className="text-red-600 font-black">#{idx + 1}</span>
                       <p className="text-neutral-300 text-sm">{regra.texto}</p>
                     </div>
-                    {isOwnerOrFounder && (
+                    {hasAdminAccess && (
                       <button onClick={() => apagarRegra(regra.id)} className="text-neutral-500 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
                     )}
                   </div>
                 ))}
               </div>
 
-              {isOwnerOrFounder && (
+              {hasAdminAccess && (
                 <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-white mb-4">Adicionar Nova Regra</h3>
                   <form onSubmit={adicionarRegra} className="space-y-3">
@@ -415,9 +381,27 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'admin' && isOwnerOrFounder && (
+          {activeTab === 'cargos' && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-black text-amber-500">PAINEL ADMINISTRATIVO & GESTÃO DE MEMBROS</h2>
+              <h2 className="text-2xl font-black text-white">HIERARQUIA DE CARGOS DA GANG</h2>
+              <div className="space-y-6">
+                {categoriasCargos.map((cat, i) => (
+                  <div key={i} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
+                    <h3 className="text-lg font-bold text-red-500 border-b border-neutral-800 pb-2">{cat.categoria}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {cat.cargos.map((c, j) => (
+                        <span key={j} className="bg-neutral-950 border border-neutral-800 text-neutral-200 px-3 py-1.5 rounded-xl text-xs font-bold">{c}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'admin' && hasAdminAccess && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-black text-amber-500">PAINEL ADMINISTRATIVO & SUPORTE (GESTÃO DE MEMBROS)</h2>
               <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
