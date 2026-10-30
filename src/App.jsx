@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, User, Bell, MessageSquare, CheckCircle, ShieldAlert
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, User, Bell, MessageSquare, ShieldAlert
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -239,7 +239,6 @@ export default function App() {
     alert("Perfil atualizado com sucesso!");
   };
 
-  // Funções de Gestão de Avisos e Pedidos
   const publicarAvisoGeral = async (e) => {
     e.preventDefault();
     if (!novoAviso.titulo || !novoAviso.mensagem) return;
@@ -349,6 +348,14 @@ export default function App() {
       setMembrosSelecionados([]);
     } else {
       setMembrosSelecionados(membrosFiltrados.map(m => m.uid));
+    }
+  };
+
+  const alternarSelecaoMembro = (uid) => {
+    if (membrosSelecionados.includes(uid)) {
+      setMembrosSelecionados(membrosSelecionados.filter(id => id !== uid));
+    } else {
+      setMembrosSelecionados([...membrosSelecionados, uid]);
     }
   };
 
@@ -715,7 +722,6 @@ export default function App() {
                   </button>
                 </form>
 
-                {/* Lista de Pedidos do Próprio / Staff */}
                 <div className="space-y-3 pt-4 border-t border-neutral-800">
                   <h3 className="text-sm font-bold text-white">Os Teus Pedidos Recentes</h3>
                   {pedidosUpgrade.filter(p => isFounder || p.uid === user.uid).map(ped => (
@@ -818,7 +824,7 @@ export default function App() {
                 <MessageSquare className="w-16 h-16 text-indigo-500 mx-auto animate-bounce" />
                 <h2 className={`text-3xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>DISCORD OFICIAL MAGNATAS 01!</h2>
                 <p className="text-neutral-400 text-sm">Entra no nosso servidor de Discord para comunicados em tempo real, calls de assalto e suporte direto com a liderança.</p>
-                <a href="https://discord.com" target="_blank" rel="noreferrer" className="inline-flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg">
+                <a href="https://discord.gg/MRdedT4nKd" target="_blank" rel="noreferrer" className="inline-flex items-center justify-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl transition shadow-lg">
                   <MessageSquare className="w-5 h-5"/><span>Entrar no Servidor do Discord</span>
                 </a>
               </div>
