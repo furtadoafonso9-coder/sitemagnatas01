@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Edit3
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -64,7 +64,6 @@ export default function App() {
         const unsubscribeDoc = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            // Garantir compatibilidade com múltiplos cargos
             if (!data.roles && data.role) {
               data.roles = [data.role];
             } else if (!data.roles) {
@@ -72,7 +71,17 @@ export default function App() {
             }
             setUserData(data);
           } else {
-            setUserData({ status: 'sem_candidatura', roles: ['01 Visitant'] });
+            // Se o utilizador for novo, cria o documento base
+            const defaultData = { 
+              uid: currentUser.uid,
+              email: currentUser.email,
+              nome: currentUser.displayName || 'Membro',
+              status: 'sem_candidatura', 
+              roles: ['01 Visitant'],
+              role: '01 Visitant'
+            };
+            setDoc(userRef, defaultData, { merge: true });
+            setUserData(defaultData);
           }
           setLoading(false);
         });
@@ -140,6 +149,7 @@ export default function App() {
     if (!user) return;
     const userRef = doc(db, 'users', user.uid);
     const payload = {
+      ...userData,
       uid: user.uid,
       email: user.email,
       nome: user.displayName || 'Membro',
@@ -178,7 +188,6 @@ export default function App() {
     carregarDadosGang();
   };
 
-  // Funções de Gestão (Founder / Owner / Admin)
   const adicionarRoupa = async (e) => {
     e.preventDefault();
     await addDoc(collection(db, 'roupas'), novaRoupa);
@@ -345,7 +354,7 @@ export default function App() {
                 <p className="text-neutral-400">Plataforma oficial operacional. Consulta abaixo o estado de membros, líderes e punições.</p>
               </div>
 
-              {/* SECÇÃO 1: PLAYERS EM DESTAQUE */}
+              {/* Destaques */}
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-amber-400 flex items-center space-x-2 border-b border-neutral-800 pb-2">
                   <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
@@ -368,7 +377,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECÇÃO 2: LÍDERES E FUNDADORES */}
+              {/* Líderes */}
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-red-500 border-b border-neutral-800 pb-2">Líderes e Fundadores</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -386,7 +395,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECÇÃO 3: MEMBROS ATIVOS */}
+              {/* Membros Ativos */}
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-neutral-200 border-b border-neutral-800 pb-2">Membros Ativos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -404,7 +413,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECÇÃO 4: MEMBROS EM AUSÊNCIA */}
+              {/* Ausentes */}
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-amber-500 flex items-center space-x-2 border-b border-neutral-800 pb-2">
                   <AlertCircle className="w-5 h-5 text-amber-500" />
@@ -423,7 +432,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECÇÃO 5: MEMBROS BANIDOS */}
+              {/* Banidos */}
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-red-600 flex items-center space-x-2 border-b border-neutral-800 pb-2">
                   <UserX className="w-5 h-5 text-red-600" />
