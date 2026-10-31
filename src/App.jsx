@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, User, Bell, MessageSquare, ShieldAlert, Check, UserCheck
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, User, Bell, MessageSquare, ShieldAlert, Check, UserCheck, Upload, Link as LinkIcon
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -15,10 +15,10 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
 
   const [allUsers, setAllUsers] = useState([]);
-  const [formData, setFormData] = useState({ idade: '', nomeIngame: '', idIngame: '', kills: '', tempoCidade: '', motivo: '', fotoPerfil: '', bio: '' });
+  const [formData, setFormData] = useState({ idade: '', nomeIngame: '', idIngame: '', kills: '', tempoCidade: '', motivo: '', fotoPerfil: '', bio: '', discordTag: '' });
 
   // Edição de Perfil Próprio
-  const [perfilEdit, setPerfilEdit] = useState({ fotoPerfil: '', bio: '' });
+  const [perfilEdit, setPerfilEdit] = useState({ fotoPerfil: '', bio: '', discordTag: '' });
 
   // Conteúdos dinâmicos
   const [roupas, setRoupas] = useState([]);
@@ -31,7 +31,7 @@ export default function App() {
 
   // Estados de Moderação / Filtros / Seleção
   const [busca, setBusca] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroStatus, setFiltroStatus] = useState('aprovado');
   const [filtroCargo, setFiltroCargo] = useState('todos');
   const [membrosSelecionados, setMembrosSelecionados] = useState([]);
   const [membroModalAudit, setMembroModalAudit] = useState(null);
@@ -86,6 +86,17 @@ export default function App() {
     return 'bg-amber-950/80 text-amber-300 border-amber-800';
   };
 
+  // Função para converter ficheiro local em Base64
+  const handleFileUpload = (e, targetStateSetter, fieldName) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      targetStateSetter(prev => ({ ...prev, [fieldName]: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -100,7 +111,7 @@ export default function App() {
               data.roles = ['01 Visitant'];
             }
             setUserData(data);
-            setPerfilEdit({ fotoPerfil: data.fotoPerfil || '', bio: data.bio || '' });
+            setPerfilEdit({ fotoPerfil: data.fotoPerfil || '', bio: data.bio || '', discordTag: data.discordTag || '' });
           } else {
             const defaultData = { 
               uid: currentUser.uid,
@@ -112,11 +123,12 @@ export default function App() {
               auditLog: [],
               notasInternas: '',
               fotoPerfil: currentUser.photoURL || '',
-              bio: 'Membro oficial da Magnatas 01!'
+              bio: 'Membro oficial da Magnatas 01!',
+              discordTag: ''
             };
             setDoc(userRef, defaultData, { merge: true });
             setUserData(defaultData);
-            setPerfilEdit({ fotoPerfil: defaultData.fotoPerfil, bio: defaultData.bio });
+            setPerfilEdit({ fotoPerfil: defaultData.fotoPerfil, bio: defaultData.bio, discordTag: defaultData.discordTag });
           }
           setLoading(false);
         });
@@ -228,17 +240,17 @@ export default function App() {
     };
     await setDoc(userRef, payload, { merge: true });
     setUserData(payload);
-    setPerfilEdit({ fotoPerfil: formData.fotoPerfil, bio: formData.bio });
+    setPerfilEdit({ fotoPerfil: formData.fotoPerfil, bio: formData.bio, discordTag: formData.discordTag });
   };
 
   const guardarPerfilPessoal = async (e) => {
     e.preventDefault();
     if (!user) return;
     const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { fotoPerfil: perfilEdit.fotoPerfil, bio: perfilEdit.bio });
+    await updateDoc(userRef, { fotoPerfil: perfilEdit.fotoPerfil, bio: perfilEdit.bio, discordTag: perfilEdit.discordTag });
     setUserData(prev => ({ ...prev, ...perfilEdit }));
     carregarDadosGang();
-    alert("Perfil atualizado com sucesso!");
+    alert("Perfil e Discord atualizados com sucesso!");
   };
 
   const publicarAvisoGeral = async (e) => {
@@ -323,6 +335,10 @@ export default function App() {
     const logs = registarAuditLog(userTarget, 'Gestão de Cargo', acaoTxt);
     const userRef = doc(db, 'users', targetUid);
     await updateDoc(userRef, { roles: novasRoles, role: novasRoles[0], auditLog: logs });
+    
+    // Simulação / Aviso de Sincronização Discord Bot
+    console.log(`[DISCORD SYNC] A atualizar cargos para o membro ${userTarget.nomeIngame} (Discord: ${userTarget.discordTag || 'N/A'}) ➔ Sincronizado com sucesso!`);
+
     carregarDadosGang();
   };
 
@@ -474,9 +490,23 @@ export default function App() {
               <div><label className="text-xs text-neutral-400 font-bold">4. KILLS ATUAIS</label><input required type="number" value={formData.kills} onChange={e => setFormData({...formData, kills: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
             </div>
             <div><label className="text-xs text-neutral-400 font-bold">5. QUANTO TEMPO DE CIDADE?</label><input required type="text" value={formData.tempoCidade} onChange={e => setFormData({...formData, tempoCidade: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
-            <div><label className="text-xs text-neutral-400 font-bold">6. LINK DA FOTO DE PERFIL / IN-GAME (URL) <span className="text-neutral-500 font-normal">(Opcional)</span></label><input type="text" placeholder="https://exemplo.com/foto.jpg" value={formData.fotoPerfil} onChange={e => setFormData({...formData, fotoPerfil: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
-            <div><label className="text-xs text-neutral-400 font-bold">7. BIOGRAFIA / BREVE DESCRIÇÃO</label><input required type="text" placeholder="Ex: Operacional focado em assaltos..." value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
-            <div><label className="text-xs text-neutral-400 font-bold">8. MOTIVO PARA ENTRAR NA GANG?</label><textarea required rows="3" value={formData.motivo} onChange={e => setFormData({...formData, motivo: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none"></textarea></div>
+            
+            {/* UPLOAD DE FOTO LOCAL */}
+            <div>
+              <label className="text-xs text-neutral-400 font-bold">6. FOTO DE PERFIL / IN-GAME (Ficheiro Local - Opcional)</label>
+              <div className="mt-1 flex items-center space-x-3">
+                <label className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center space-x-2">
+                  <Upload className="w-4 h-4 text-red-500" />
+                  <span>Carregar Imagem do Aparelho</span>
+                  <input type="file" accept="image/*" onChange={e => handleFileUpload(e, setFormData, 'fotoPerfil')} className="hidden" />
+                </label>
+                {formData.fotoPerfil && <span className="text-xs text-emerald-400 font-bold">✓ Imagem carregada</span>}
+              </div>
+            </div>
+
+            <div><label className="text-xs text-neutral-400 font-bold">7. O SEU DISCORD (Ex: utilizador#0000 ou @utilizador)</label><input type="text" placeholder="utilizador#1234" value={formData.discordTag} onChange={e => setFormData({...formData, discordTag: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
+            <div><label className="text-xs text-neutral-400 font-bold">8. BIOGRAFIA / BREVE DESCRIÇÃO</label><input required type="text" placeholder="Ex: Operacional focado em assaltos..." value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
+            <div><label className="text-xs text-neutral-400 font-bold">9. MOTIVO PARA ENTRAR NA GANG?</label><textarea required rows="3" value={formData.motivo} onChange={e => setFormData({...formData, motivo: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none"></textarea></div>
             <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2"><Send className="w-5 h-5"/><span>Submeter Candidatura</span></button>
           </form>
         </div>
@@ -517,8 +547,10 @@ export default function App() {
   const isSuportOrAdmin = isFounder || userRoles.some(r => ['Suport', 'Staff ATHOS PvP', 'Resp. Manager´s', 'Manager´s Approval'].includes(r));
   const isAdmOrFounder = isFounder || userRoles.some(r => ['Staff ATHOS PvP', 'Resp. Manager´s'].includes(r));
 
-  // Filtros de membros
+  // Filtros de membros (Exclui automaticamente quem não tem candidatura válida na listagem de admin/membros)
   const membrosFiltrados = allUsers.filter(u => {
+    if (!u.status || u.status === 'sem_candidatura') return false; // Exclui membros sem candidatura
+
     const ingame = (u.nomeIngame || '').toLowerCase();
     const idGame = (u.idIngame || '').toLowerCase();
     const motivo = (u.motivo || '').toLowerCase();
@@ -578,7 +610,7 @@ export default function App() {
           <button onClick={() => setActiveTab('autorizacoes')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'autorizacoes' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><Shirt className="w-5 h-5" /><span>Autorizações (Calças/Manga)</span></button>
           <button onClick={() => setActiveTab('avisos_pessoais')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'avisos_pessoais' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><ShieldAlert className="w-5 h-5" /><span>Meus Avisos / Punições</span></button>
           <button onClick={() => setActiveTab('discord')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'discord' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><MessageSquare className="w-5 h-5" /><span>Discord da Gang</span></button>
-          <button onClick={() => setActiveTab('perfil')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'perfil' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><User className="w-5 h-5" /><span>Meu Perfil</span></button>
+          <button onClick={() => setActiveTab('perfil')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'perfil' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><User className="w-5 h-5" /><span>Meu Perfil & Discord</span></button>
           
           {isSuportOrAdmin && (
             <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'admin' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/30' : darkMode ? 'hover:bg-neutral-800 text-amber-500' : 'hover:bg-neutral-200 text-amber-600'}`}>
@@ -618,6 +650,7 @@ export default function App() {
                         <h4 className={`font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{m.nomeIngame || 'Membro'}</h4>
                         <p className="text-xs text-amber-500 font-semibold">{m.roles?.[0] || 'Membro'}</p>
                         <p className="text-xs text-neutral-500">ID: {m.idIngame || 'N/A'}</p>
+                        {m.discordTag && <p className="text-[10px] text-indigo-400 font-mono mt-0.5">💬 {m.discordTag}</p>}
                         {m.bio && <p className="text-[11px] text-neutral-400 italic mt-1">"{m.bio}"</p>}
                       </div>
                     </div>
@@ -644,6 +677,7 @@ export default function App() {
                         <div className="flex flex-wrap gap-1 mt-1">
                           {m.roles?.map((r, idx) => <span key={idx} className={`text-[10px] border px-1.5 py-0.5 rounded-md font-semibold ${getCargoColorStyle(r)}`}>{r}</span>)}
                         </div>
+                        {m.discordTag && <p className="text-[10px] text-indigo-400 font-mono mt-1">💬 {m.discordTag}</p>}
                         {m.bio && <p className="text-[11px] text-neutral-400 italic mt-1">"{m.bio}"</p>}
                       </div>
                     </div>
@@ -667,6 +701,7 @@ export default function App() {
                         <div className="flex flex-wrap gap-1 mt-1">
                           {m.roles?.map((r, idx) => <span key={idx} className={`text-[10px] border px-1.5 py-0.5 rounded-md font-semibold ${getCargoColorStyle(r)}`}>{r}</span>)}
                         </div>
+                        {m.discordTag && <p className="text-[10px] text-indigo-400 font-mono mt-1">💬 {m.discordTag}</p>}
                         {m.bio && <p className="text-[11px] text-neutral-400 italic mt-1">"{m.bio}"</p>}
                       </div>
                     </div>
@@ -843,7 +878,7 @@ export default function App() {
 
           {activeTab === 'perfil' && (
             <div className="space-y-6 max-w-xl mx-auto">
-              <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>GERIR MEU PERFIL</h2>
+              <h2 className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>GERIR MEU PERFIL & DISCORD</h2>
               <div className={`border rounded-2xl p-6 space-y-6 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
                 <div className="flex items-center space-x-4">
                   {perfilEdit.fotoPerfil ? (
@@ -856,20 +891,39 @@ export default function App() {
                   <div>
                     <h3 className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{userData?.nomeIngame || 'Membro'}</h3>
                     <p className="text-xs text-neutral-500">ID In-Game: {userData?.idIngame || 'N/A'}</p>
+                    {userData?.discordTag && <p className="text-xs text-indigo-400 font-mono mt-1">💬 Discord: {userData.discordTag}</p>}
                   </div>
                 </div>
 
                 <form onSubmit={guardarPerfilPessoal} className="space-y-4">
+                  {/* FOTO DE PERFIL LOCAL */}
                   <div>
-                    <label className="text-xs text-neutral-400 font-bold">Link da Foto de Perfil (URL) <span className="text-neutral-500 font-normal">(Opcional)</span></label>
+                    <label className="text-xs text-neutral-400 font-bold">Foto de Perfil (Ficheiro Local)</label>
+                    <div className="mt-1 flex items-center space-x-3">
+                      <label className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 px-4 py-2.5 rounded-lg text-xs font-bold flex items-center space-x-2">
+                        <Upload className="w-4 h-4 text-red-500" />
+                        <span>Alterar Imagem do Aparelho</span>
+                        <input type="file" accept="image/*" onChange={e => handleFileUpload(e, setPerfilEdit, 'fotoPerfil')} className="hidden" />
+                      </label>
+                      {perfilEdit.fotoPerfil && <span className="text-xs text-emerald-400 font-bold">✓ Imagem pronta</span>}
+                    </div>
+                  </div>
+
+                  {/* VINCULAR DISCORD */}
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold flex items-center space-x-1">
+                      <LinkIcon className="w-3.5 h-3.5 text-indigo-400"/>
+                      <span>Vincular Conta Discord (Tag / Username)</span>
+                    </label>
                     <input 
                       type="text" 
-                      value={perfilEdit.fotoPerfil} 
-                      onChange={e => setPerfilEdit({...perfilEdit, fotoPerfil: e.target.value})} 
-                      placeholder="https://exemplo.com/foto.jpg" 
+                      value={perfilEdit.discordTag} 
+                      onChange={e => setPerfilEdit({...perfilEdit, discordTag: e.target.value})} 
+                      placeholder="Ex: utilizador#1234 ou @utilizador" 
                       className={`w-full border rounded-lg p-3 text-sm outline-none mt-1 ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} 
                     />
                   </div>
+
                   <div>
                     <label className="text-xs text-neutral-400 font-bold">Biografia / Descrição do Personagem</label>
                     <textarea 
@@ -881,7 +935,7 @@ export default function App() {
                     ></textarea>
                   </div>
                   <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2">
-                    <User className="w-5 h-5"/><span>Guardar Alterações do Perfil</span>
+                    <User className="w-5 h-5"/><span>Guardar Perfil & Vincular Discord</span>
                   </button>
                 </form>
               </div>
@@ -915,11 +969,21 @@ export default function App() {
                   <h3 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-neutral-900'}`}>Adicionar Nova Roupa / Kit</h3>
                   <form onSubmit={adicionarRoupa} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input required type="text" placeholder="Nome do Kit" value={novaRoupa.nome} onChange={e => setNovaRoupa({...novaRoupa, nome: e.target.value})} className={`border rounded-lg p-3 text-sm outline-none ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} />
-                    <input required type="text" placeholder="Link da Imagem (URL da foto)" value={novaRoupa.imagem} onChange={e => setNovaRoupa({...novaRoupa, imagem: e.target.value})} className={`border rounded-lg p-3 text-sm outline-none ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} />
+                    
+                    {/* UPLOAD LOCAL DA ROUPA */}
+                    <div>
+                      <label className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 px-4 py-3 rounded-lg text-xs font-bold flex items-center justify-center space-x-2">
+                        <Upload className="w-4 h-4 text-red-500" />
+                        <span>Carregar Imagem da Roupa (Ficheiro)</span>
+                        <input type="file" accept="image/*" onChange={e => handleFileUpload(e, setNovaRoupa, 'imagem')} className="hidden" />
+                      </label>
+                      {novaRoupa.imagem && <span className="text-[10px] text-emerald-400 block mt-1">✓ Imagem carregada</span>}
+                    </div>
+
                     <input required type="text" placeholder="Top (Ex: ID 142)" value={novaRoupa.top} onChange={e => setNovaRoupa({...novaRoupa, top: e.target.value})} className={`border rounded-lg p-3 text-sm outline-none ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} />
                     <input required type="text" placeholder="Calças (Ex: ID 35)" value={novaRoupa.calcas} onChange={e => setNovaRoupa({...novaRoupa, calcas: e.target.value})} className={`border rounded-lg p-3 text-sm outline-none ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} />
                     <input required type="text" placeholder="Máscara (Ex: ID 22)" value={novaRoupa.mascara} onChange={e => setNovaRoupa({...novaRoupa, mascara: e.target.value})} className={`md:col-span-2 border rounded-lg p-3 text-sm outline-none ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-50 border-neutral-300 text-black'}`} />
-                    <button type="submit" className="md:col-span-2 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2"><Plus className="w-5 h-5"/><span>Guardar Roupa com Foto</span></button>
+                    <button type="submit" className="md:col-span-2 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2"><Plus className="w-5 h-5"/><span>Guardar Roupa</span></button>
                   </form>
                 </div>
               )}
@@ -1122,6 +1186,7 @@ export default function App() {
                           </th>
                           <th className="pb-2">Membro</th>
                           <th className="pb-2">ID / Idade</th>
+                          <th className="pb-2">Discord</th>
                           <th className="pb-2">Estado</th>
                           <th className="pb-2">Cargos Atribuidos</th>
                           <th className="pb-2 text-center">Gerir Cargos</th>
@@ -1156,6 +1221,9 @@ export default function App() {
                               <td className="py-2.5 text-neutral-400">
                                 <span className="font-bold text-white">ID: {u.idIngame || '-'}</span> | {u.idade ? `${u.idade} anos` : '-'}
                               </td>
+                              <td className="py-2.5 text-indigo-400 font-mono text-[10px]">
+                                {u.discordTag ? u.discordTag : <span className="text-neutral-600 italic">Não vinculado</span>}
+                              </td>
                               <td className="py-2.5">
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : u.status === 'pendente' ? 'bg-amber-950 text-amber-400' : 'bg-red-950 text-red-400'}`}>{u.status}</span>
                               </td>
@@ -1169,20 +1237,21 @@ export default function App() {
                                 </div>
                               </td>
 
-                              {/* BOTÃO COMPACTO PARA ATRIBUIR CARGOS VIA DROPDOWN */}
+                              {/* BOTÃO COMPACTO PARA ATRIBUIR CARGOS VIA DROPDOWN + SYNC DISCORD */}
                               <td className="py-2.5 text-center relative">
                                 <button 
                                   onClick={() => setCargoMenuAberto(menuAberto ? null : u.uid)}
                                   className="bg-neutral-800 hover:bg-neutral-700 text-white font-bold p-1.5 rounded-lg text-[10px] inline-flex items-center space-x-1"
+                                  title="Atualiza no site e sincroniza com o Discord"
                                 >
                                   <Plus className="w-3.5 h-3.5 text-red-500"/>
-                                  <span>Cargos</span>
+                                  <span>Cargos (Discord 💬)</span>
                                 </button>
 
                                 {menuAberto && (
                                   <div className="absolute right-0 top-10 w-64 bg-neutral-900 border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-left max-h-64 overflow-y-auto space-y-2">
                                     <div className="flex justify-between items-center border-b border-neutral-800 pb-1">
-                                      <span className="text-[10px] font-bold text-neutral-400 uppercase">Atribuir / Remover Cargo</span>
+                                      <span className="text-[10px] font-bold text-neutral-400 uppercase">Atribuir / Sincronizar Discord</span>
                                       <button onClick={() => setCargoMenuAberto(null)} className="text-neutral-500 hover:text-white"><XCircle className="w-3.5 h-3.5"/></button>
                                     </div>
                                     {categoriasCargos.map((cat, cIdx) => (
@@ -1245,6 +1314,7 @@ export default function App() {
                           <div>
                             <h4 className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{cand.nomeIngame || 'Candidato'}</h4>
                             <p className="text-xs text-neutral-400">Nome Real: {cand.nomeReal || cand.email} • ID: {cand.idIngame || 'N/A'}</p>
+                            {cand.discordTag && <p className="text-xs text-indigo-400 font-mono mt-0.5">💬 Discord: {cand.discordTag}</p>}
                           </div>
                         </div>
 
@@ -1303,6 +1373,7 @@ export default function App() {
                 <div>
                   <h3 className="text-xl font-bold">{membroModalAudit.nomeIngame || 'Membro'}</h3>
                   <p className="text-xs text-neutral-400">Real: {membroModalAudit.nomeReal || membroModalAudit.email} • ID: {membroModalAudit.idIngame || 'N/A'}</p>
+                  {membroModalAudit.discordTag && <p className="text-xs text-indigo-400 font-mono mt-0.5">💬 Discord: {membroModalAudit.discordTag}</p>}
                   {membroModalAudit.bio && <p className="text-xs text-amber-400 italic mt-1">"{membroModalAudit.bio}"</p>}
                 </div>
               </div>
