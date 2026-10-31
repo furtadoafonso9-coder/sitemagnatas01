@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, User, Bell, MessageSquare, ShieldAlert
+  Shield, Users, LogIn, LogOut, Clock, XCircle, Shirt, Radio, BookOpen, Send, Settings, Plus, Trash2, Award, Star, AlertCircle, UserX, Crown, Search, History, StickyNote, Download, CheckSquare, Square, Sun, Moon, User, Bell, MessageSquare, ShieldAlert, Check, UserCheck
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -11,6 +11,7 @@ export default function App() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [adminSubTab, setAdminSubTab] = useState('membros'); // 'membros' ou 'candidaturas'
   const [darkMode, setDarkMode] = useState(true);
 
   const [allUsers, setAllUsers] = useState([]);
@@ -35,6 +36,7 @@ export default function App() {
   const [membrosSelecionados, setMembrosSelecionados] = useState([]);
   const [membroModalAudit, setMembroModalAudit] = useState(null);
   const [notaEdicao, setNotaEdicao] = useState('');
+  const [cargoMenuAberto, setCargoMenuAberto] = useState(null);
 
   // Formulários
   const [novaRoupa, setNovaRoupa] = useState({ nome: '', top: '', calcas: '', mascara: '', imagem: '' });
@@ -472,7 +474,7 @@ export default function App() {
               <div><label className="text-xs text-neutral-400 font-bold">4. KILLS ATUAIS</label><input required type="number" value={formData.kills} onChange={e => setFormData({...formData, kills: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
             </div>
             <div><label className="text-xs text-neutral-400 font-bold">5. QUANTO TEMPO DE CIDADE?</label><input required type="text" value={formData.tempoCidade} onChange={e => setFormData({...formData, tempoCidade: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
-            <div><label className="text-xs text-neutral-400 font-bold">6. LINK DA FOTO DE PERFIL / IN-GAME (URL)</label><input required type="text" placeholder="https://exemplo.com/foto.jpg" value={formData.fotoPerfil} onChange={e => setFormData({...formData, fotoPerfil: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
+            <div><label className="text-xs text-neutral-400 font-bold">6. LINK DA FOTO DE PERFIL / IN-GAME (URL) <span className="text-neutral-500 font-normal">(Opcional)</span></label><input type="text" placeholder="https://exemplo.com/foto.jpg" value={formData.fotoPerfil} onChange={e => setFormData({...formData, fotoPerfil: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
             <div><label className="text-xs text-neutral-400 font-bold">7. BIOGRAFIA / BREVE DESCRIÇÃO</label><input required type="text" placeholder="Ex: Operacional focado em assaltos..." value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none" /></div>
             <div><label className="text-xs text-neutral-400 font-bold">8. MOTIVO PARA ENTRAR NA GANG?</label><textarea required rows="3" value={formData.motivo} onChange={e => setFormData({...formData, motivo: e.target.value})} className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white focus:border-red-600 outline-none"></textarea></div>
             <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2"><Send className="w-5 h-5"/><span>Submeter Candidatura</span></button>
@@ -515,7 +517,7 @@ export default function App() {
   const isSuportOrAdmin = isFounder || userRoles.some(r => ['Suport', 'Staff ATHOS PvP', 'Resp. Manager´s', 'Manager´s Approval'].includes(r));
   const isAdmOrFounder = isFounder || userRoles.some(r => ['Staff ATHOS PvP', 'Resp. Manager´s'].includes(r));
 
-  // Filtro avançado
+  // Filtros de membros
   const membrosFiltrados = allUsers.filter(u => {
     const ingame = (u.nomeIngame || '').toLowerCase();
     const idGame = (u.idIngame || '').toLowerCase();
@@ -529,8 +531,10 @@ export default function App() {
     return bateBusca && bateStatus && bateCargo;
   });
 
+  const candidaturasPendentes = allUsers.filter(u => u.status === 'pendente');
+
   const totalAtivos = allUsers.filter(u => u.status === 'aprovado').length;
-  const totalPendentes = allUsers.filter(u => u.status === 'pendente').length;
+  const totalPendentes = candidaturasPendentes.length;
   const totalWarnings = allUsers.filter(u => u.roles?.some(r => r.includes('Warning'))).length;
   const totalFounders = allUsers.filter(u => u.roles?.some(r => ['Owner', '01 Founder´s', '| Magnata 01! ©'].includes(r))).length;
 
@@ -577,7 +581,13 @@ export default function App() {
           <button onClick={() => setActiveTab('perfil')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'perfil' ? 'bg-red-600 text-white shadow-lg shadow-red-900/30' : darkMode ? 'hover:bg-neutral-800 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-600'}`}><User className="w-5 h-5" /><span>Meu Perfil</span></button>
           
           {isSuportOrAdmin && (
-            <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'admin' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/30' : darkMode ? 'hover:bg-neutral-800 text-amber-500' : 'hover:bg-neutral-200 text-amber-600'}`}><Settings className="w-5 h-5" /><span>Painel Admin & Suporte</span></button>
+            <button onClick={() => setActiveTab('admin')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium transition ${activeTab === 'admin' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/30' : darkMode ? 'hover:bg-neutral-800 text-amber-500' : 'hover:bg-neutral-200 text-amber-600'}`}>
+              <Settings className="w-5 h-5" />
+              <div className="flex justify-between items-center w-full">
+                <span>Painel Admin & Suporte</span>
+                {totalPendentes > 0 && <span className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">{totalPendentes}</span>}
+              </div>
+            </button>
           )}
         </aside>
 
@@ -851,7 +861,7 @@ export default function App() {
 
                 <form onSubmit={guardarPerfilPessoal} className="space-y-4">
                   <div>
-                    <label className="text-xs text-neutral-400 font-bold">Link da Foto de Perfil (URL)</label>
+                    <label className="text-xs text-neutral-400 font-bold">Link da Foto de Perfil (URL) <span className="text-neutral-500 font-normal">(Opcional)</span></label>
                     <input 
                       type="text" 
                       value={perfilEdit.fotoPerfil} 
@@ -1020,155 +1030,260 @@ export default function App() {
 
           {activeTab === 'admin' && isSuportOrAdmin && (
             <div className="space-y-6">
+              
+              {/* NAVEGAÇÃO ENTRE SUB-ABAS DE ADMIN */}
+              <div className={`flex border-b border-neutral-800 space-x-4 pb-2`}>
+                <button 
+                  onClick={() => setAdminSubTab('membros')} 
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition ${adminSubTab === 'membros' ? 'bg-red-600 text-white shadow-md' : 'text-neutral-400 hover:bg-neutral-800'}`}
+                >
+                  <Users className="w-4 h-4"/>
+                  <span>Gestão Geral de Membros</span>
+                </button>
+                <button 
+                  onClick={() => setAdminSubTab('candidaturas')} 
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition relative ${adminSubTab === 'candidaturas' ? 'bg-red-600 text-white shadow-md' : 'text-neutral-400 hover:bg-neutral-800'}`}
+                >
+                  <UserCheck className="w-4 h-4"/>
+                  <span>Candidaturas Pendentes</span>
+                  {totalPendentes > 0 && (
+                    <span className="bg-amber-500 text-black font-black text-[10px] px-2 py-0.5 rounded-full ml-1">{totalPendentes}</span>
+                  )}
+                </button>
+              </div>
+
               {/* DASHBOARD RESUMO */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className={`border p-5 rounded-2xl flex items-center space-x-4 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
-                  <div className="p-3 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-400"><Users className="w-6 h-6"/></div>
-                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Membros Ativos</p><p className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalAtivos}</p></div>
+                <div className={`border p-4 rounded-xl flex items-center space-x-3 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                  <div className="p-2.5 bg-emerald-950/60 border border-emerald-800 rounded-xl text-emerald-400"><Users className="w-5 h-5"/></div>
+                  <div><p className="text-[10px] text-neutral-400 font-bold uppercase">Membros Ativos</p><p className={`text-xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalAtivos}</p></div>
                 </div>
-                <div className={`border p-5 rounded-2xl flex items-center space-x-4 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
-                  <div className="p-3 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-400"><Clock className="w-6 h-6"/></div>
-                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Pendentes</p><p className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalPendentes}</p></div>
+                <div className={`border p-4 rounded-xl flex items-center space-x-3 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                  <div className="p-2.5 bg-amber-950/60 border border-amber-800 rounded-xl text-amber-400"><Clock className="w-5 h-5"/></div>
+                  <div><p className="text-[10px] text-neutral-400 font-bold uppercase">Pendentes</p><p className={`text-xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalPendentes}</p></div>
                 </div>
-                <div className={`border p-5 rounded-2xl flex items-center space-x-4 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
-                  <div className="p-3 bg-red-950/60 border border-red-800 rounded-xl text-red-400"><AlertCircle className="w-6 h-6"/></div>
-                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Warnings Ativos</p><p className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalWarnings}</p></div>
+                <div className={`border p-4 rounded-xl flex items-center space-x-3 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                  <div className="p-2.5 bg-red-950/60 border border-red-800 rounded-xl text-red-400"><AlertCircle className="w-5 h-5"/></div>
+                  <div><p className="text-[10px] text-neutral-400 font-bold uppercase">Warnings Ativos</p><p className={`text-xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalWarnings}</p></div>
                 </div>
-                <div className={`border p-5 rounded-2xl flex items-center space-x-4 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
-                  <div className="p-3 bg-purple-950/60 border border-purple-800 rounded-xl text-purple-400"><Crown className="w-6 h-6"/></div>
-                  <div><p className="text-xs text-neutral-400 font-bold uppercase">Founders / Staff</p><p className={`text-2xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalFounders}</p></div>
-                </div>
-              </div>
-
-              {/* BARRA DE PESQUISA E FILTROS */}
-              <div className={`border rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
-                <div className={`flex-1 w-full flex items-center space-x-2 border rounded-xl px-3 py-2 ${darkMode ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}>
-                  <Search className="w-4 h-4 text-neutral-500" />
-                  <input type="text" placeholder="Pesquisar por Nome In-Game, ID, Motivo..." value={busca} onChange={e => setBusca(e.target.value)} className={`bg-transparent text-sm outline-none w-full ${darkMode ? 'text-white' : 'text-black'}`} />
-                </div>
-                <div className="flex gap-2 w-full md:w-auto">
-                  <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className={`text-xs rounded-xl p-2.5 outline-none border ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-100 border-neutral-300 text-black'}`}>
-                    <option value="todos">Todos os Estados</option>
-                    <option value="aprovado">Aprovados</option>
-                    <option value="pendente">Pendentes</option>
-                    <option value="reprovado">Reprovados</option>
-                  </select>
-                  <select value={filtroCargo} onChange={e => setFiltroCargo(e.target.value)} className={`text-xs rounded-xl p-2.5 outline-none border ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-100 border-neutral-300 text-black'}`}>
-                    <option value="todos">Todos os Cargos</option>
-                    {cargosDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <button onClick={exportarMembrosJSON} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2.5 rounded-xl text-xs font-bold flex items-center space-x-1" title="Exportar Dados">
-                    <Download className="w-4 h-4"/>
-                  </button>
+                <div className={`border p-4 rounded-xl flex items-center space-x-3 shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                  <div className="p-2.5 bg-purple-950/60 border border-purple-800 rounded-xl text-purple-400"><Crown className="w-5 h-5"/></div>
+                  <div><p className="text-[10px] text-neutral-400 font-bold uppercase">Founders / Staff</p><p className={`text-xl font-black ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{totalFounders}</p></div>
                 </div>
               </div>
 
-              {/* AÇÕES EM MASSA */}
-              {membrosSelecionados.length > 0 && (
-                <div className="bg-red-950/80 border border-red-800 rounded-2xl p-4 flex items-center justify-between animate-fadeIn">
-                  <span className="text-xs font-bold text-red-200">{membrosSelecionados.length} membro(s) selecionado(s)</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => acaoEmMassaCargo('Warning 1', true)} className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">+ Warning 1</button>
-                    <button onClick={() => acaoEmMassaCargo('Ban Temporário', true)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">+ Ban Temp</button>
-                    <button onClick={() => setMembrosSelecionados([])} className="text-xs text-neutral-400 hover:text-white underline">Cancelar</button>
+              {/* SUB-ABA: GESTÃO DE MEMBROS */}
+              {adminSubTab === 'membros' && (
+                <div className="space-y-4">
+                  {/* BARRA DE PESQUISA E FILTROS */}
+                  <div className={`border rounded-2xl p-3 flex flex-col md:flex-row gap-3 justify-between items-center shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                    <div className={`flex-1 w-full flex items-center space-x-2 border rounded-xl px-3 py-1.5 ${darkMode ? 'bg-neutral-950 border-neutral-800' : 'bg-neutral-100 border-neutral-300'}`}>
+                      <Search className="w-4 h-4 text-neutral-500" />
+                      <input type="text" placeholder="Pesquisar por Nome In-Game, ID, Motivo..." value={busca} onChange={e => setBusca(e.target.value)} className={`bg-transparent text-xs outline-none w-full ${darkMode ? 'text-white' : 'text-black'}`} />
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className={`text-xs rounded-xl p-2 outline-none border ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-100 border-neutral-300 text-black'}`}>
+                        <option value="todos">Todos os Estados</option>
+                        <option value="aprovado">Aprovados</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="reprovado">Reprovados</option>
+                      </select>
+                      <select value={filtroCargo} onChange={e => setFiltroCargo(e.target.value)} className={`text-xs rounded-xl p-2 outline-none border ${darkMode ? 'bg-neutral-950 border-neutral-800 text-white' : 'bg-neutral-100 border-neutral-300 text-black'}`}>
+                        <option value="todos">Todos os Cargos</option>
+                        {cargosDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <button onClick={exportarMembrosJSON} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 rounded-xl text-xs font-bold flex items-center space-x-1" title="Exportar Dados">
+                        <Download className="w-4 h-4"/>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* AÇÕES EM MASSA */}
+                  {membrosSelecionados.length > 0 && (
+                    <div className="bg-red-950/80 border border-red-800 rounded-xl p-3 flex items-center justify-between">
+                      <span className="text-xs font-bold text-red-200">{membrosSelecionados.length} membro(s) selecionado(s)</span>
+                      <div className="flex gap-2">
+                        <button onClick={() => acaoEmMassaCargo('Warning 1', true)} className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-lg text-xs font-bold">+ Warning 1</button>
+                        <button onClick={() => acaoEmMassaCargo('Ban Temporário', true)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-xs font-bold">+ Ban Temp</button>
+                        <button onClick={() => setMembrosSelecionados([])} className="text-xs text-neutral-400 hover:text-white underline">Cancelar</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TABELA COMPACTA REFORMULADA */}
+                  <div className={`border rounded-2xl p-4 overflow-x-auto shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className={`border-b ${darkMode ? 'border-neutral-800 text-neutral-400' : 'border-neutral-200 text-neutral-600'}`}>
+                          <th className="pb-2 w-6">
+                            <button onClick={selecionarTodosVisiveis} className="text-neutral-500 hover:text-white">
+                              {membrosSelecionados.length === membrosFiltrados.length && membrosFiltrados.length > 0 ? <CheckSquare className="w-3.5 h-3.5 text-red-500"/> : <Square className="w-3.5 h-3.5"/>}
+                            </button>
+                          </th>
+                          <th className="pb-2">Membro</th>
+                          <th className="pb-2">ID / Idade</th>
+                          <th className="pb-2">Estado</th>
+                          <th className="pb-2">Cargos Atribuidos</th>
+                          <th className="pb-2 text-center">Gerir Cargos</th>
+                          <th className="pb-2 text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${darkMode ? 'divide-neutral-800' : 'divide-neutral-200'}`}>
+                        {membrosFiltrados.map(u => {
+                          const isSelected = membrosSelecionados.includes(u.uid);
+                          const menuAberto = cargoMenuAberto === u.uid;
+
+                          return (
+                            <tr key={u.uid} className={isSelected ? (darkMode ? 'bg-red-950/20' : 'bg-red-50') : ''}>
+                              <td className="py-2.5">
+                                <button onClick={() => alternarSelecaoMembro(u.uid)} className="text-neutral-500 hover:text-white">
+                                  {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-red-500"/> : <Square className="w-3.5 h-3.5"/>}
+                                </button>
+                              </td>
+                              <td className="py-2.5 font-bold">
+                                <div className="flex items-center space-x-2">
+                                  {u.fotoPerfil ? (
+                                    <img src={u.fotoPerfil} alt={u.nomeIngame} className="w-7 h-7 rounded-full object-cover border border-red-600" />
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-full bg-red-950 border border-red-800 flex items-center justify-center font-bold text-red-500 text-[10px] uppercase">{u.nomeIngame?.[0]}</div>
+                                  )}
+                                  <div>
+                                    <span className={darkMode ? 'text-white' : 'text-neutral-900'}>{u.nomeIngame || 'Membro'}</span>
+                                    <div className="text-[9px] text-neutral-500">{u.nomeReal || u.email}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-2.5 text-neutral-400">
+                                <span className="font-bold text-white">ID: {u.idIngame || '-'}</span> | {u.idade ? `${u.idade} anos` : '-'}
+                              </td>
+                              <td className="py-2.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : u.status === 'pendente' ? 'bg-amber-950 text-amber-400' : 'bg-red-950 text-red-400'}`}>{u.status}</span>
+                              </td>
+
+                              {/* CARGOS COMPACTOS */}
+                              <td className="py-2.5">
+                                <div className="flex flex-wrap gap-1 max-w-xs">
+                                  {u.roles?.map((r, idx) => (
+                                    <span key={idx} className={`text-[9px] border px-1.5 py-0.5 rounded-md font-semibold ${getCargoColorStyle(r)}`}>{r}</span>
+                                  ))}
+                                </div>
+                              </td>
+
+                              {/* BOTÃO COMPACTO PARA ATRIBUIR CARGOS VIA DROPDOWN */}
+                              <td className="py-2.5 text-center relative">
+                                <button 
+                                  onClick={() => setCargoMenuAberto(menuAberto ? null : u.uid)}
+                                  className="bg-neutral-800 hover:bg-neutral-700 text-white font-bold p-1.5 rounded-lg text-[10px] inline-flex items-center space-x-1"
+                                >
+                                  <Plus className="w-3.5 h-3.5 text-red-500"/>
+                                  <span>Cargos</span>
+                                </button>
+
+                                {menuAberto && (
+                                  <div className="absolute right-0 top-10 w-64 bg-neutral-900 border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-left max-h-64 overflow-y-auto space-y-2">
+                                    <div className="flex justify-between items-center border-b border-neutral-800 pb-1">
+                                      <span className="text-[10px] font-bold text-neutral-400 uppercase">Atribuir / Remover Cargo</span>
+                                      <button onClick={() => setCargoMenuAberto(null)} className="text-neutral-500 hover:text-white"><XCircle className="w-3.5 h-3.5"/></button>
+                                    </div>
+                                    {categoriasCargos.map((cat, cIdx) => (
+                                      <div key={cIdx} className="space-y-1">
+                                        <p className="text-[9px] font-bold text-red-500 uppercase">{cat.categoria}</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {cat.cargos.map(c => {
+                                            const ativo = u.roles?.includes(c);
+                                            return (
+                                              <button 
+                                                key={c}
+                                                onClick={() => alternarCargoMembro(u.uid, c, u.roles)}
+                                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition ${ativo ? 'bg-red-600 text-white border-red-500' : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:border-neutral-600'}`}
+                                              >
+                                                {ativo ? '✓ ' : '+ '}{c}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="py-2.5 text-right space-x-1">
+                                <button onClick={() => alternarDestaqueMembro(u.uid, u.emDestaque)} className={`p-1 rounded-lg border ${u.emDestaque ? 'bg-amber-950 border-amber-500 text-amber-400' : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-white'}`}>
+                                  <Star className="w-3.5 h-3.5 fill-current" />
+                                </button>
+                                <button onClick={() => { setMembroModalAudit(u); setNotaEdicao(u.notasInternas || ''); }} className="bg-neutral-800 hover:bg-neutral-700 text-white p-1 rounded-lg inline-flex items-center" title="Ver Perfil & Audit Log">
+                                  <History className="w-3.5 h-3.5 text-amber-500"/>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
 
-              {/* TABELA PRINCIPAL */}
-              <div className={`border rounded-2xl p-6 overflow-x-auto shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className={`border-b ${darkMode ? 'border-neutral-800 text-neutral-400' : 'border-neutral-200 text-neutral-600'}`}>
-                      <th className="pb-3 w-8">
-                        <button onClick={selecionarTodosVisiveis} className="text-neutral-500 hover:text-white">
-                          {membrosSelecionados.length === membrosFiltrados.length && membrosFiltrados.length > 0 ? <CheckSquare className="w-4 h-4 text-red-500"/> : <Square className="w-4 h-4"/>}
-                        </button>
-                      </th>
-                      <th className="pb-3">Membro In-Game</th>
-                      <th className="pb-3">Detalhes In-Game</th>
-                      <th className="pb-3">Estado</th>
-                      <th className="pb-3">Destaque</th>
-                      <th className="pb-3">Atribuir Cargos (Por Categorias)</th>
-                      <th className="pb-3 text-right">Ações & Histórico</th>
-                    </tr>
-                  </thead>
-                  <tbody className={`divide-y ${darkMode ? 'divide-neutral-800' : 'divide-neutral-200'}`}>
-                    {membrosFiltrados.map(u => {
-                      const isSelected = membrosSelecionados.includes(u.uid);
-                      return (
-                        <tr key={u.uid} className={isSelected ? (darkMode ? 'bg-red-950/20' : 'bg-red-50') : ''}>
-                          <td className="py-4">
-                            <button onClick={() => alternarSelecaoMembro(u.uid)} className="text-neutral-500 hover:text-white">
-                              {isSelected ? <CheckSquare className="w-4 h-4 text-red-500"/> : <Square className="w-4 h-4"/>}
-                            </button>
-                          </td>
-                          <td className="py-4 font-bold">
-                            <div className="flex items-center space-x-3">
-                              {u.fotoPerfil ? (
-                                <img src={u.fotoPerfil} alt={u.nomeIngame} className="w-10 h-10 rounded-full object-cover border border-red-600" />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-red-950 border border-red-800 flex items-center justify-center font-bold text-red-500 uppercase">{u.nomeIngame?.[0]}</div>
-                              )}
-                              <div>
-                                <span className={darkMode ? 'text-white' : 'text-neutral-900'}>{u.nomeIngame || 'Membro'}</span>
-                                <div className="text-[10px] text-neutral-500">Real: {u.nomeReal || u.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 text-neutral-400">
-                            <div><span className="font-bold text-white">ID: {u.idIngame || '-'}</span> | Idade: {u.idade || '-'}</div>
-                            {u.motivo && <div className="text-xs text-neutral-500 italic mt-0.5">Motivo: "{u.motivo}"</div>}
-                          </td>
-                          <td className="py-4">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${u.status === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : u.status === 'pendente' ? 'bg-amber-950 text-amber-400' : 'bg-red-950 text-red-400'}`}>{u.status}</span>
-                          </td>
-                          <td className="py-4">
-                            <button onClick={() => alternarDestaqueMembro(u.uid, u.emDestaque)} className={`p-1.5 rounded-lg border ${u.emDestaque ? 'bg-amber-950 border-amber-500 text-amber-400' : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-white'}`}>
-                              <Star className="w-4 h-4 fill-current" />
-                            </button>
-                          </td>
-                          
-                          {/* ATRIBUIR CARGOS */}
-                          <td className="py-4 space-y-2 max-w-md">
-                            {categoriasCargos.map((cat, catIdx) => (
-                              <div key={catIdx} className={`border p-2 rounded-xl ${darkMode ? 'bg-neutral-950/80 border-neutral-800' : 'bg-neutral-100 border-neutral-200'}`}>
-                                <p className="text-[10px] font-bold text-red-500 uppercase mb-1">{cat.categoria}</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {cat.cargos.map(c => {
-                                    const ativo = u.roles?.includes(c);
-                                    return (
-                                      <button 
-                                        key={c} 
-                                        onClick={() => alternarCargoMembro(u.uid, c, u.roles)}
-                                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${ativo ? 'bg-red-600 text-white border-red-500 shadow-md' : darkMode ? 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'bg-white text-neutral-700 border-neutral-300 hover:border-neutral-400'}`}
-                                      >
-                                        {c}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-                          </td>
+              {/* SUB-ABA: CANDIDATURAS PENDENTES */}
+              {adminSubTab === 'candidaturas' && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-amber-500 flex items-center space-x-2">
+                    <Clock className="w-5 h-5 text-amber-500"/>
+                    <span>Candidaturas a Aguardar Avaliação ({candidaturasPendentes.length})</span>
+                  </h3>
 
-                          <td className="py-4 text-right space-x-2">
-                            {u.status === 'pendente' && (
-                              <>
-                                <button onClick={() => atualizarStatusCandidato(u.uid, 'aprovado', ['01 Member´s'])} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Aprovar</button>
-                                <button onClick={() => atualizarStatusCandidato(u.uid, 'reprovado', ['01 Visitant'])} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Reprovar</button>
-                              </>
-                            )}
-                            <button onClick={() => { setMembroModalAudit(u); setNotaEdicao(u.notasInternas || ''); }} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 rounded-lg text-xs font-bold inline-flex items-center space-x-1" title="Ver Perfil & Audit Log">
-                              <History className="w-4 h-4 text-amber-500"/>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {candidaturasPendentes.map(cand => (
+                      <div key={cand.uid} className={`border p-5 rounded-2xl space-y-3 relative shadow-md transition-colors duration-300 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                        <div className="flex items-center space-x-3 border-b border-neutral-800 pb-3">
+                          {cand.fotoPerfil ? (
+                            <img src={cand.fotoPerfil} alt={cand.nomeIngame} className="w-12 h-12 rounded-full object-cover border border-amber-500" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-amber-950 border border-amber-600 flex items-center justify-center font-bold text-amber-400 uppercase">{cand.nomeIngame?.[0]}</div>
+                          )}
+                          <div>
+                            <h4 className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-neutral-900'}`}>{cand.nomeIngame || 'Candidato'}</h4>
+                            <p className="text-xs text-neutral-400">Nome Real: {cand.nomeReal || cand.email} • ID: {cand.idIngame || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs text-neutral-300">
+                          <p>Idade: <strong className="text-white">{cand.idade || '-'}</strong></p>
+                          <p>Kills: <strong className="text-white">{cand.kills || '-'}</strong></p>
+                          <p className="col-span-2">Tempo de Cidade: <strong className="text-white">{cand.tempoCidade || '-'}</strong></p>
+                        </div>
+
+                        {cand.bio && <p className="text-xs text-neutral-400 italic">Bio: "{cand.bio}"</p>}
+                        {cand.motivo && (
+                          <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 text-xs text-neutral-300">
+                            <span className="font-bold text-amber-500 block mb-1">Motivo de entrada:</span>
+                            "{cand.motivo}"
+                          </div>
+                        )}
+
+                        <div className="flex space-x-3 pt-2">
+                          <button onClick={() => atualizarStatusCandidato(cand.uid, 'aprovado', ['01 Member´s'])} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-1">
+                            <Check className="w-4 h-4"/><span>Aprovar Membro</span>
+                          </button>
+                          <button onClick={() => atualizarStatusCandidato(cand.uid, 'reprovado', ['01 Visitant'])} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center space-x-1">
+                            <XCircle className="w-4 h-4"/><span>Reprovar</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {candidaturasPendentes.length === 0 && (
+                      <div className={`col-span-2 border p-8 rounded-2xl text-center space-y-2 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
+                        <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
+                        <h4 className="font-bold text-white">Sem Candidaturas Pendentes</h4>
+                        <p className="text-xs text-neutral-400">Todas as candidaturas submetidas já foram avaliadas pela equipa.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
         </main>
