@@ -1275,7 +1275,7 @@ export default function App() {
 
                     {candidaturasPendentes.length === 0 && (
                       <div className={`col-span-2 border p-8 rounded-2xl text-center space-y-2 ${darkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-neutral-300'}`}>
-                        <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
+                        <Check className="w-12 h-12 text-emerald-500 mx-auto" />
                         <h4 className="font-bold text-white">Sem Candidaturas Pendentes</h4>
                         <p className="text-xs text-neutral-400">Todas as candidaturas submetidas já foram avaliadas pela equipa.</p>
                       </div>
