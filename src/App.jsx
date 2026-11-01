@@ -8,7 +8,9 @@ import {
   getDoc, 
   updateDoc, 
   query, 
-  orderBy 
+  orderBy,
+  addDoc,
+  deleteDoc
 } from 'firebase/firestore';
 
 const ALL_ROLES = [
@@ -41,12 +43,18 @@ export default function App() {
   const [usernameInput, setUsernameInput] = useState('');
 
   const [usersList, setUsersList] = useState([]);
+  const [roupas, setRoupas] = useState([]);
+  const [regras, setRegras] = useState([]);
+  const [radios, setRadios] = useState({ principal: { frequencia: '100.0', info: 'Rádio Principal' }, alternativa: { frequencia: '105.5', info: 'Rádio Secundária' } });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('aprovado');
   const [roleFilter, setRoleFilter] = useState('todos');
   const [activeRoleModalUser, setActiveRoleModalUser] = useState(null);
 
   const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
+  const [formRoupa, setFormRoupa] = useState({ nome: '', numero: '', imagem: '' });
+  const [formRegra, setFormRegra] = useState({ categoria: 'Gerais', titulo: '', descricao: '', ordem: 1 });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('magnatas_email_user');
@@ -80,9 +88,23 @@ export default function App() {
       snap.forEach(d => list.push({ id: d.id, ...d.data() }));
       setUsersList(list);
     });
+    const unsubRoupas = onSnapshot(collection(db, 'roupas'), (snap) => {
+      let r = [];
+      snap.forEach(d => r.push({ id: d.id, ...d.data() }));
+      setRoupas(r);
+    });
+    const unsubRadios = onSnapshot(collection(db, 'config'), (snap) => {
+      snap.forEach(d => { if (d.id === 'radios') setRadios(d.data()); });
+    });
+    const qRegras = query(collection(db, 'regras'), orderBy('ordem', 'asc'));
+    const unsubRegras = onSnapshot(qRegras, (snap) => {
+      let reg = [];
+      snap.forEach(d => reg.push({ id: d.id, ...d.data() }));
+      setRegras(reg);
+    });
 
     return () => {
-      unsubUser(); unsubUsers();
+      unsubUser(); unsubUsers(); unsubRoupas(); unsubRadios(); unsubRegras();
     };
   }, [user]);
 
@@ -123,6 +145,10 @@ export default function App() {
     localStorage.removeItem('magnatas_email_user');
     setUser(null); setUserDoc(null);
   };
+
+  const userRoles = userDoc?.roles || [];
+  const isFounder = userRoles.includes("01 FOUNDER'S") || userRoles.includes("OWNER");
+  const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader's");
 
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
@@ -231,7 +257,8 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0d0e12] text-gray-200 font-sans flex">
+    <div className="min-h-screen bg-[#0d0e12] text-gray-200 font-sans flex relative">
+      {/* SIDEBAR Fiel à Imagem */}
       <aside className="w-64 bg-[#121418] border-r border-neutral-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
         <div>
           <div className="p-5 border-b border-neutral-800/60 flex items-center gap-3">
@@ -239,33 +266,63 @@ export default function App() {
             <h2 className="text-lg font-black tracking-wider text-red-600">MAGNATAS 01!</h2>
           </div>
           <nav className="p-3 space-y-1 text-xs font-bold">
-            <button onClick={() => { setCurrentView('base'); setSubTab('membros'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'base' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
+            <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'base' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
               <span>👥</span> Base da Gang
+            </button>
+            <button onClick={() => setCurrentView('avisos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'avisos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
+              <span>🔔</span> Avisos Gerais da Gang
+            </button>
+            <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
+              <span>👕</span> Roupas & Kits
+            </button>
+            <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'radio' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
+              <span>📡</span> Frequências Rádio
+            </button>
+            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'regras' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
+              <span>📖</span> Regras Oficiais
             </button>
             <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
               <span>🎖️</span> Lista de Cargos
             </button>
+            <button onClick={() => setCurrentView('upgrade')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-400 hover:bg-neutral-900/50 transition">
+              <span>⭐</span> Pedir Upgrade / Promoção
+            </button>
+            <button onClick={() => setCurrentView('autorizacoes')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-400 hover:bg-neutral-900/50 transition">
+              <span>🎽</span> Autorizações (Calças/Manga)
+            </button>
+            <button onClick={() => setCurrentView('meusavisos')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-400 hover:bg-neutral-900/50 transition">
+              <span>⚠️</span> Meus Avisos / Punições
+            </button>
+            <button onClick={() => setCurrentView('discord')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-400 hover:bg-neutral-900/50 transition">
+              <span>💬</span> Discord da Gang
+            </button>
+            <button onClick={() => setCurrentView('perfil')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-neutral-400 hover:bg-neutral-900/50 transition">
+              <span>👤</span> Meu Perfil & Discord
+            </button>
           </nav>
         </div>
+        
+        {/* BOTÃO LARANJA DE ADMIN EM DESTAQUE */}
         <div className="p-3">
-          <button onClick={() => { setCurrentView('base'); setSubTab('admin'); }} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 text-white font-black py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg">
+          <button onClick={() => { setCurrentView('base'); setSubTab('admin'); }} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-black py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition">
             <span>⚙️</span> Painel Admin & Suporte
           </button>
         </div>
       </aside>
 
+      {/* CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-neutral-800/80 bg-[#121418] px-8 flex justify-between items-center sticky top-0 z-30">
           <h1 className="font-black text-sm uppercase tracking-wider text-red-600">MAGNATAS 01!</h1>
           <div className="flex items-center gap-2">
             <div className="flex flex-wrap gap-1.5 items-center">
-              {ALL_ROLES.slice(0, 6).map(role => (
+              {ALL_ROLES.slice(0, 8).map(role => (
                 <span key={role.name} className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase ${role.color}`}>
                   {role.name}
                 </span>
               ))}
             </div>
-            <button onClick={handleLogout} className="ml-4 text-neutral-500 hover:text-red-500 text-sm font-bold">🚪</button>
+            <button onClick={handleLogout} title="Sair" className="ml-4 text-neutral-500 hover:text-red-500 text-sm font-bold">🚪</button>
           </div>
         </header>
 
@@ -273,14 +330,15 @@ export default function App() {
           {currentView === 'base' && (
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <button onClick={() => setSubTab('membros')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black ${subTab === 'membros' ? 'bg-red-600 text-white shadow-lg' : 'bg-[#121418] text-neutral-400 border border-neutral-800'}`}>
+                <button onClick={() => setSubTab('membros')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition ${subTab === 'membros' ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' : 'bg-[#121418] text-neutral-400 border border-neutral-800'}`}>
                   <span>👥</span> Gestão Geral de Membros
                 </button>
-                <button onClick={() => setSubTab('pendentes')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold ${subTab === 'pendentes' ? 'bg-red-600 text-white shadow-lg' : 'bg-[#121418] text-neutral-400 border border-neutral-800'}`}>
+                <button onClick={() => setSubTab('pendentes')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition ${subTab === 'pendentes' ? 'bg-red-600 text-white shadow-lg' : 'bg-[#121418] text-neutral-400 border border-neutral-800'}`}>
                   <span>⏳</span> Candidaturas Pendentes ({usersList.filter(u => u.estado === 'pendente_analise').length})
                 </button>
               </div>
 
+              {/* 4 CARDS ESTATÍSTICOS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-[#121418] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4">
                   <div className="w-12 h-12 bg-emerald-950/60 text-emerald-400 rounded-xl flex items-center justify-center text-xl">👥</div>
@@ -296,24 +354,65 @@ export default function App() {
                     <h3 className="text-2xl font-black text-white">{usersList.filter(u => u.estado === 'pendente_analise').length}</h3>
                   </div>
                 </div>
+                <div className="bg-[#121418] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4">
+                  <div className="w-12 h-12 bg-red-950/60 text-red-400 rounded-xl flex items-center justify-center text-xl">❗</div>
+                  <div>
+                    <p className="text-[10px] font-extrabold text-neutral-400 uppercase">Warnings Ativos</p>
+                    <h3 className="text-2xl font-black text-white">0</h3>
+                  </div>
+                </div>
+                <div className="bg-[#121418] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4">
+                  <div className="w-12 h-12 bg-purple-950/60 text-purple-400 rounded-xl flex items-center justify-center text-xl">👑</div>
+                  <div>
+                    <p className="text-[10px] font-extrabold text-neutral-400 uppercase">Founders / Staff</p>
+                    <h3 className="text-2xl font-black text-white">{usersList.filter(u => (u.roles || []).some(r => r.includes('Founder') || r.includes('STAFF'))).length || 1}</h3>
+                  </div>
+                </div>
+              </div>
+
+              {/* BARRA DE PESQUISA E FILTROS */}
+              <div className="flex flex-col md:flex-row gap-3 items-center">
+                <div className="relative flex-1 w-full">
+                  <span className="absolute left-4 top-3.5 text-neutral-500 text-xs">🔍</span>
+                  <input 
+                    type="text"
+                    placeholder="Pesquisar por Nome In-Game, ID, Motivo..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full bg-[#121418] border border-neutral-800/80 pl-10 pr-4 py-3 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-red-600"
+                  />
+                </div>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-[#121418] border border-neutral-800/80 px-4 py-3 rounded-xl text-xs text-neutral-300 font-bold focus:outline-none">
+                  <option value="aprovado">Aprovados</option>
+                  <option value="pendente_analise">Pendentes</option>
+                  <option value="rejeitado">Rejeitados</option>
+                  <option value="todos">Todos os Estados</option>
+                </select>
+                <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="bg-[#121418] border border-neutral-800/80 px-4 py-3 rounded-xl text-xs text-neutral-300 font-bold focus:outline-none">
+                  <option value="todos">Todos os Cargos</option>
+                  {ALL_ROLES.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
+                </select>
               </div>
 
               {subTab === 'membros' ? (
-                <div className="bg-[#121418] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="bg-[#121418] border border-neutral-800/80 rounded-2xl overflow-visible shadow-2xl">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-neutral-800 text-neutral-400 bg-neutral-900/30">
+                        <th className="p-4 w-10 text-center"><input type="checkbox" className="rounded border-neutral-800 bg-neutral-900" /></th>
                         <th className="p-4">Membro</th>
                         <th className="p-4">ID / Idade</th>
                         <th className="p-4">Discord</th>
                         <th className="p-4">Estado</th>
                         <th className="p-4">Cargos Atribuídos</th>
                         <th className="p-4 text-center">Gerir Cargos</th>
+                        <th className="p-4 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-800/60">
                       {filteredUsers.map(m => (
-                        <tr key={m.id} className="hover:bg-neutral-900/40">
+                        <tr key={m.id} className="hover:bg-neutral-900/40 relative">
+                          <td className="p-4 text-center"><input type="checkbox" className="rounded border-neutral-800 bg-neutral-900" /></td>
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-red-950 border border-red-700 flex items-center justify-center font-bold text-white text-xs">
@@ -325,38 +424,48 @@ export default function App() {
                               </div>
                             </div>
                           </td>
-                          <td className="p-4 text-neutral-300">ID: <strong className="text-white">{m.idInGame || 'N/A'}</strong></td>
-                          <td className="p-4 text-indigo-400">@{m.username}</td>
+                          <td className="p-4 text-neutral-300">ID: <strong className="text-white">{m.idInGame || 'N/A'}</strong> | {m.idade || '18'} anos</td>
+                          <td className="p-4 text-indigo-400 font-medium">@{m.username}</td>
                           <td className="p-4">
                             <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase bg-emerald-950 text-emerald-400 border border-emerald-700">
                               {m.estado || 'aprovado'}
                             </span>
                           </td>
                           <td className="p-4">
-                            <div className="flex flex-wrap gap-1 max-w-sm">
-                              {(m.roles || ["01 Member's"]).map(r => (
-                                <span key={r} className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-950 border border-emerald-600 text-emerald-400">
-                                  {r}
-                                </span>
-                              ))}
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {(m.roles || ["01 Member's"]).map(r => {
+                                const roleObj = ALL_ROLES.find(ar => ar.name === r);
+                                return (
+                                  <span key={r} className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${roleObj ? roleObj.color : 'bg-emerald-950 border-emerald-600 text-emerald-400'}`}>
+                                    {r}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </td>
-                          <td className="p-4 text-center">
-                            <button onClick={() => setActiveRoleModalUser(activeRoleModalUser === m.id ? null : m.id)} className="bg-neutral-900 border border-neutral-700 text-neutral-300 px-3 py-1.5 rounded-lg text-[11px] mx-auto font-bold">
-                              + Cargos
+                          <td className="p-4 text-center relative">
+                            <button onClick={() => setActiveRoleModalUser(activeRoleModalUser === m.id ? null : m.id)} className="bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 px-3 py-1.5 rounded-lg text-[11px] mx-auto font-bold flex items-center gap-1">
+                              <span>+ Cargos (Discord 💬)</span>
                             </button>
                             {activeRoleModalUser === m.id && (
-                              <div className="absolute mt-2 w-56 bg-[#16191f] border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-left space-y-1">
+                              <div className="absolute right-10 top-12 w-60 bg-[#16191f] border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-left space-y-1.5 max-h-56 overflow-y-auto">
+                                <h5 className="text-[10px] font-black text-neutral-400 uppercase border-b border-neutral-800 pb-1">Gerir Cargos</h5>
                                 {ALL_ROLES.map(r => {
                                   const has = (m.roles || []).includes(r.name);
                                   return (
-                                    <button key={r.name} onClick={() => handleToggleRole(m.id, r.name)} className={`w-full text-left px-2 py-1 rounded text-[10px] font-bold flex justify-between ${has ? 'bg-red-600/20 text-red-400' : 'text-neutral-400 hover:bg-neutral-800'}`}>
+                                    <button key={r.name} onClick={() => handleToggleRole(m.id, r.name)} className={`w-full text-left px-2.5 py-1.5 rounded text-[10px] font-bold flex justify-between items-center ${has ? 'bg-red-600/20 text-red-400 border border-red-600/40' : 'text-neutral-400 hover:bg-neutral-800'}`}>
                                       <span>{r.name}</span><span>{has ? '✓' : '+'}</span>
                                     </button>
                                   );
                                 })}
                               </div>
                             )}
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="flex justify-end gap-2 text-neutral-500">
+                              <button className="hover:text-amber-400 text-sm">⭐</button>
+                              <button className="hover:text-white text-sm">🔄</button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -365,18 +474,24 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {usersList.filter(u => u.estado === 'pendente_analise').map(cand => (
-                    <div key={cand.id} className="bg-[#121418] border border-amber-500/30 p-6 rounded-2xl flex justify-between items-center">
-                      <div>
-                        <h4 className="font-black text-white text-sm">{cand.username} (In-Game: {cand.nomeInGame || 'N/A'})</h4>
-                        <p className="text-xs text-neutral-400">Motivo: {cand.motivo}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => handleAprovarCandidatura(cand)} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Aprovar</button>
-                        <button onClick={() => handleReprovarCandidatura(cand)} className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Reprovar</button>
-                      </div>
+                  {usersList.filter(u => u.estado === 'pendente_analise').length === 0 ? (
+                    <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl text-center text-neutral-500 text-xs">
+                      Não existem candidaturas pendentes de momento.
                     </div>
-                  ))}
+                  ) : (
+                    usersList.filter(u => u.estado === 'pendente_analise').map(cand => (
+                      <div key={cand.id} className="bg-[#121418] border border-amber-500/30 p-6 rounded-2xl flex justify-between items-center">
+                        <div>
+                          <h4 className="font-black text-white text-sm">{cand.username} (In-Game: {cand.nomeInGame || 'N/A'})</h4>
+                          <p className="text-xs text-neutral-400 mt-1">ID: {cand.idInGame} | Idade: {cand.idade} | Motivo: {cand.motivo}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleAprovarCandidatura(cand)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs uppercase">Aprovar</button>
+                          <button onClick={() => handleReprovarCandidatura(cand)} className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl text-xs uppercase">Reprovar</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -389,11 +504,19 @@ export default function App() {
                 {ALL_ROLES.map(role => (
                   <div key={role.name} className="bg-[#121418] border border-neutral-800 p-4 rounded-2xl flex justify-between items-center">
                     <span className="text-xs font-bold text-white">{role.name}</span>
+                    <span className="text-[10px] bg-neutral-900 px-2 py-1 rounded text-neutral-400">
+                      {usersList.filter(u => (u.roles || []).includes(role.name)).length} membros
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {currentView === 'avisos' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Avisos Gerais da Gang em desenvolvimento.</div>}
+          {currentView === 'roupas' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Catálogo de Roupas & Kits ativo.</div>}
+          {currentView === 'radio' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Frequências de Rádio ativas.</div>}
+          {currentView === 'regras' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Regras Oficiais ativas.</div>}
         </main>
       </div>
     </div>
