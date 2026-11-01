@@ -6,6 +6,7 @@ import {
   onSnapshot, 
   doc, 
   setDoc,
+  getDoc,
   updateDoc 
 } from 'firebase/firestore';
 
@@ -26,7 +27,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // ==========================================
-// CONFIGURAÇÃO OAUTH2 DISCORD (TOKEN DIRETO)
+// CONFIGURAÇÃO OAUTH2 DISCORD
 // ==========================================
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
@@ -34,16 +35,17 @@ const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCO
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [userStatus, setUserStatus] = useState('pendente'); // 'pendente', 'aprovado', 'rejeitado'
   const [currentView, setCurrentView] = useState('gestao');
   const [subView, setSubView] = useState('membros'); 
   const [darkMode, setDarkMode] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [usersList, setUsersList] = useState([]);
   const [stats, setStats] = useState({ ativos: 12, pendentes: 2, warnings: 0, staff: 1 });
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
 
-  // Estados para Candidaturas e Funcionalidades
+  // Formulário de Candidatura
+  const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
+
   const [candidaturas, setCandidaturas] = useState([
     { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' },
     { id: '2', nome: 'reys_fps', idInGame: '30492', idade: '17 anos', motivo: 'Recomendado pelo membro Ciganomano.', estado: 'pendente' }
@@ -59,7 +61,7 @@ export default function App() {
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
   ]);
 
-  // Captura do Token de Acesso do Discord diretamente na URL (#access_token)
+  // Captura do Token do Discord na URL (#access_token)
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
@@ -69,7 +71,6 @@ export default function App() {
       if (accessToken) {
         window.history.replaceState({}, document.title, window.location.pathname);
         
-        // Requisição para buscar os dados do utilizador autenticado no Discord
         fetch('https://discord.com/api/users/@me', {
           headers: { authorization: `Bearer ${accessToken}` }
         })
@@ -87,37 +88,40 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // Grava ou atualiza os dados do membro no Firestore automaticamente
+            // Verificar o estado do utilizador no Firestore
             const userRef = doc(db, 'users', discordUser.id);
-            await setDoc(userRef, {
-              discordId: discordUser.id,
-              username: discordUser.username,
-              discordTag: profile.discordTag,
-              avatar: profile.avatar,
-              idInGame: Math.floor(2000 + Math.random() * 25000),
-              age: '18 anos',
-              estado: 'aprovado',
-              roles: ['01 Member´s'],
-              lastLogin: new Date().toISOString()
-            }, { merge: true });
+            const docSnap = await getDoc(userRef);
+            
+            if (docSnap.exists()) {
+              setUserStatus(docSnap.data().estado || 'pendente');
+            } else {
+              // Se é novo, cria como pendente para obrigar a candidatura
+              await setDoc(userRef, {
+                discordId: discordUser.id,
+                username: discordUser.username,
+                discordTag: profile.discordTag,
+                avatar: profile.avatar,
+                estado: 'pendente',
+                lastLogin: new Date().toISOString()
+              });
+              setUserStatus('pendente');
+            }
           }
         })
-        .catch(err => {
-          console.error("Erro ao obter perfil do Discord:", err);
-          // Fallback automático caso a API do Discord bloqueie por CORS
-          const fallbackProfile = {
-            id: "1545423627846025296",
-            username: "MagnatasMember",
-            avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
-            discordTag: "@magnatasmember"
-          };
-          setUser(fallbackProfile);
-          localStorage.setItem('magnatas_discord_user', JSON.stringify(fallbackProfile));
-        });
+        .catch(err => console.error("Erro ao obter perfil do Discord:", err));
       }
     } else {
       const saved = localStorage.getItem('magnatas_discord_user');
-      if (saved) setUser(JSON.parse(saved));
+      if (saved) {
+        const parsedUser = JSON.parse(saved);
+        setUser(parsedUser);
+        // Verificar estado no Firestore para sessões salvas
+        getDoc(doc(db, 'users', parsedUser.id)).then(docSnap => {
+          if (docSnap.exists()) {
+            setUserStatus(docSnap.data().estado || 'pendente');
+          }
+        });
+      }
     }
   }, []);
 
@@ -134,42 +138,47 @@ export default function App() {
       });
 
       setUsersList(members);
-      if (members.length > 0) {
-        setStats(prev => ({ 
-          ...prev, 
-          ativos: ativosCount, 
-          pendentes: candidaturas.length 
-        }));
-      }
+      setStats(prev => ({ ...prev, ativos: ativosCount }));
     });
 
     return () => unsubscribeUsersCollection();
-  }, [candidaturas.length]);
+  }, []);
 
   const handleDiscordLogin = () => {
     window.location.href = DISCORD_AUTH_URL;
   };
 
-  const handleAlternativeLogin = () => {
-    const name = prompt("Insere o teu nome/tag do Discord para acesso direto:");
-    if (!name) return;
-    const profile = {
-      id: Math.floor(100000 + Math.random() * 900000).toString(),
-      username: name,
-      avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
-      discordTag: `@${name.toLowerCase()}`
-    };
-    setUser(profile);
-    localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('magnatas_discord_user');
     setUser(null);
+    setUserStatus('pendente');
   };
 
-  const handleAprovarCandidatura = (id) => {
+  // Submeter Candidatura
+  const handleSubmitCandidatura = async (e) => {
+    e.preventDefault();
+    if (!formCandidatura.idInGame || !formCandidatura.motivo) {
+      alert('Preenche todos os campos obrigatórios da candidatura!');
+      return;
+    }
+
+    const userRef = doc(db, 'users', user.id);
+    await updateDoc(userRef, {
+      idInGame: formCandidatura.idInGame,
+      idade: formCandidatura.idade || '18 anos',
+      motivo: formCandidatura.motivo,
+      estado: 'pendente_analise'
+    });
+
+    setUserStatus('pendente_analise');
+    alert('Candidatura enviada com sucesso! Aguarda a aprovação da Staff.');
+  };
+
+  const handleAprovarCandidatura = async (id, discordId) => {
     setCandidaturas(prev => prev.filter(c => c.id !== id));
+    if (discordId) {
+      await updateDoc(doc(db, 'users', discordId), { estado: 'aprovado', roles: ['01 Member´s'] });
+    }
     alert('Candidatura aprovada com sucesso!');
   };
 
@@ -178,79 +187,69 @@ export default function App() {
     alert('Candidatura rejeitada.');
   };
 
-  const handleForceSync = async () => {
-    if (!user) return;
-    setSyncLoading(true);
-    setSyncMessage('A comunicar com o Bot do Discord...');
-    setTimeout(() => {
-      setSyncLoading(false);
-      setSyncMessage('✅ Cargos sincronizados com sucesso!');
-      setTimeout(() => setSyncMessage(''), 4000);
-    }, 1200);
-  };
-
   const filteredMembers = usersList.filter(m => 
     (m.username && m.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (m.idInGame && m.idInGame.toString().includes(searchTerm)) ||
-    (m.discordTag && m.discordTag.toLowerCase().includes(searchTerm.toLowerCase()))
+    (m.idInGame && m.idInGame.toString().includes(searchTerm))
   );
 
   return (
     <div className={darkMode ? "min-h-screen bg-[#121418] text-gray-200 font-sans flex" : "min-h-screen bg-gray-100 text-gray-800 font-sans flex"}>
       
-      {/* 📁 SIDEBAR */}
-      <aside className={`w-64 border-r ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20`}>
-        <div>
-          <div className="p-6 flex items-center space-x-3 border-b border-neutral-800/50">
-            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-black text-white shadow-lg shadow-red-600/30">
-              🛡️
+      {/* 📁 SIDEBAR (Só aparece se o utilizador estiver logado E aprovado) */}
+      {user && userStatus === 'aprovado' && (
+        <aside className={`w-64 border-r ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20`}>
+          <div>
+            <div className="p-6 flex items-center space-x-3 border-b border-neutral-800/50">
+              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-black text-white shadow-lg shadow-red-600/30">
+                🛡️
+              </div>
+              <span className="text-lg font-black tracking-wider text-red-500">MAGNATAS 01!</span>
             </div>
-            <span className="text-lg font-black tracking-wider text-red-500">MAGNATAS 01!</span>
+
+            <nav className="p-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)]">
+              {[
+                { id: 'gestao', label: 'Base da Gang', icon: '📂' },
+                { id: 'avisos', label: 'Avisos Gerais da Gang', icon: '🔔' },
+                { id: 'roupas', label: 'Roupas & Kits', icon: '👕' },
+                { id: 'radios', label: 'Frequências Rádio', icon: '📻' },
+                { id: 'regras', label: 'Regras Oficiais', icon: '📜' },
+                { id: 'cargos', label: 'Lista de Cargos', icon: '🏷️' },
+                { id: 'upgrade', label: 'Pedir Upgrade / Promoção', icon: '⭐' },
+                { id: 'autorizacoes', label: 'Autorizações (Calças/Manga)', icon: '✨' },
+                { id: 'punicoes', label: 'Meus Avisos / Punições', icon: '⚠️' },
+                { id: 'discord', label: 'Discord da Gang', icon: '💬' }
+              ].map((menu) => (
+                <button
+                  key={menu.id}
+                  onClick={() => { setCurrentView(menu.id); if(menu.id === 'gestao') setSubView('membros'); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === menu.id ? 'bg-red-600/10 text-red-500 border border-red-600/20' : 'text-gray-400 hover:bg-neutral-800/40 hover:text-gray-200'}`}
+                >
+                  <span>{menu.icon}</span>
+                  <span>{menu.label}</span>
+                </button>
+              ))}
+            </nav>
           </div>
 
-          <nav className="p-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)]">
-            {[
-              { id: 'gestao', label: 'Base da Gang', icon: '📂' },
-              { id: 'avisos', label: 'Avisos Gerais da Gang', icon: '🔔' },
-              { id: 'roupas', label: 'Roupas & Kits', icon: '👕' },
-              { id: 'radios', label: 'Frequências Rádio', icon: '📻' },
-              { id: 'regras', label: 'Regras Oficiais', icon: '📜' },
-              { id: 'cargos', label: 'Lista de Cargos', icon: '🏷️' },
-              { id: 'upgrade', label: 'Pedir Upgrade / Promoção', icon: '⭐' },
-              { id: 'autorizacoes', label: 'Autorizações (Calças/Manga)', icon: '✨' },
-              { id: 'punicoes', label: 'Meus Avisos / Punições', icon: '⚠️' },
-              { id: 'discord', label: 'Discord da Gang', icon: '💬' }
-            ].map((menu) => (
-              <button
-                key={menu.id}
-                onClick={() => { setCurrentView(menu.id); if(menu.id === 'gestao') setSubView('membros'); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === menu.id ? 'bg-red-600/10 text-red-500 border border-red-600/20' : 'text-gray-400 hover:bg-neutral-800/40 hover:text-gray-200'}`}
-              >
-                <span>{menu.icon}</span>
-                <span>{menu.label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="p-4 border-t border-neutral-800/50 space-y-2">
-          <button 
-            onClick={() => setCurrentView('admin')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'admin' ? 'bg-amber-600 text-white' : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20'}`}
-          >
-            <span>⚙️</span>
-            <span>Painel Admin & Suporte</span>
-          </button>
-          
-          <button 
-            onClick={() => setCurrentView('perfil')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'perfil' ? 'bg-red-600 text-white shadow-lg' : 'bg-neutral-800/60 text-gray-300 hover:bg-neutral-800'}`}
-          >
-            <span>👤</span>
-            <span>Meu Perfil & Discord</span>
-          </button>
-        </div>
-      </aside>
+          <div className="p-4 border-t border-neutral-800/50 space-y-2">
+            <button 
+              onClick={() => setCurrentView('admin')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'admin' ? 'bg-amber-600 text-white' : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20'}`}
+            >
+              <span>⚙️</span>
+              <span>Painel Admin & Suporte</span>
+            </button>
+            
+            <button 
+              onClick={() => setCurrentView('perfil')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'perfil' ? 'bg-red-600 text-white shadow-lg' : 'bg-neutral-800/60 text-gray-300 hover:bg-neutral-800'}`}
+            >
+              <span>👤</span>
+              <span>Meu Perfil & Discord</span>
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* 🖥️ CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -258,21 +257,14 @@ export default function App() {
         <header className={`h-16 border-b ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} px-8 flex justify-between items-center sticky top-0 z-30 shadow-sm`}>
           <div className="flex items-center gap-4">
             <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">
-              {currentView === 'gestao' ? 'PAINEL GERAL DE MEMBROS' : `SECÇÃO: ${currentView.toUpperCase()}`}
+              {user && userStatus === 'aprovado' ? (currentView === 'gestao' ? 'PAINEL GERAL DE MEMBROS' : `SECÇÃO: ${currentView.toUpperCase()}`) : 'PORTAL DE CANDIDATURA - MAGNATAS 01'}
             </span>
           </div>
 
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setDarkMode(!darkMode)}
-              className="p-2 rounded-xl bg-neutral-800 text-yellow-400 border border-neutral-700 text-xs font-bold hover:bg-neutral-700 transition"
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
-
             {user ? (
               <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition">
-                Sair
+                Sair ({user.username})
               </button>
             ) : (
               <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition">
@@ -290,28 +282,74 @@ export default function App() {
               </div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
               <p className="text-neutral-400 text-xs leading-relaxed mb-8">
-                Para aceder à plataforma e sincronizar os teus cargos no Discord do Magnatas 01, efetua login com a tua conta.
+                Para aceder ou submeter a tua candidatura para a gang Magnatas 01, efetua login com a tua conta do Discord.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <button 
-                  onClick={handleDiscordLogin}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-6 py-3.5 rounded-2xl text-xs tracking-wider uppercase shadow-xl shadow-indigo-600/30 transition duration-200"
-                >
-                  VINCULAR DISCORD (OAUTH2)
-                </button>
-                <button 
-                  onClick={handleAlternativeLogin}
-                  className="bg-neutral-800 hover:bg-neutral-700 text-gray-300 font-extrabold px-6 py-3.5 rounded-2xl text-xs tracking-wider uppercase border border-neutral-700 transition duration-200"
-                >
-                  ⚡ Acesso Direto
-                </button>
+              <button 
+                onClick={handleDiscordLogin}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs tracking-wider uppercase shadow-xl shadow-indigo-600/30 transition duration-200"
+              >
+                VINCULAR DISCORD (OAUTH2)
+              </button>
+            </div>
+          ) : userStatus !== 'aprovado' ? (
+            /* ECRÃ DE CANDIDATURA OBRIGATÓRIA PARA NÃO APROVADOS */
+            <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-red-600/10 border border-red-500/20 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
+                  📝
+                </div>
+                <h2 className="text-xl font-black text-white">Formulário de Candidatura</h2>
+                <p className="text-xs text-neutral-400">Olá, <span className="text-indigo-400 font-bold">{user.username}</span>! Preenche os dados abaixo para seres avaliado pela liderança dos Magnatas 01.</p>
               </div>
+
+              <form onSubmit={handleSubmitCandidatura} className="space-y-4">
+                <div>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">ID In-Game</label>
+                  <input 
+                    type="number"
+                    placeholder="Ex: 27356"
+                    value={formCandidatura.idInGame}
+                    onChange={(e) => setFormCandidatura({...formCandidatura, idInGame: e.target.value})}
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-600"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">Idade na Vida Real</label>
+                  <input 
+                    type="text"
+                    placeholder="Ex: 19 anos"
+                    value={formCandidatura.idade}
+                    onChange={(e) => setFormCandidatura({...formCandidatura, idade: e.target.value})}
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">Por que queres entrar na Gang?</label>
+                  <textarea 
+                    placeholder="Explica a tua motivação, experiência em RP e portagem..."
+                    value={formCandidatura.motivo}
+                    onChange={(e) => setFormCandidatura({...formCandidatura, motivo: e.target.value})}
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28 focus:outline-none focus:border-red-600"
+                    required
+                  ></textarea>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition"
+                >
+                  Enviar Candidatura para Análise
+                </button>
+              </form>
             </div>
           ) : (
+            /* CONTEÚDO COMPLETO APENAS PARA MEMBROS APROVADOS */
             <>
               {currentView === 'gestao' && (
                 <>
-                  {/* ABAS: MEMBROS / CANDIDATURAS */}
                   <div className="flex gap-4 border-b border-neutral-800 pb-4">
                     <button 
                       onClick={() => setSubView('membros')}
@@ -332,242 +370,58 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* CARDS */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
-                      <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center font-bold text-lg border border-emerald-500/20">👥</div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Membros Ativos</p>
-                        <h3 className="text-2xl font-black text-white">{stats.ativos}</h3>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
-                      <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-xl flex items-center justify-center font-bold text-lg border border-amber-500/20">⏳</div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Pendentes</p>
-                        <h3 className="text-2xl font-black text-white">{candidaturas.length}</h3>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
-                      <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center font-bold text-lg border border-red-500/20">⚠️</div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Warnings Ativos</p>
-                        <h3 className="text-2xl font-black text-white">0</h3>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
-                      <div className="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-xl flex items-center justify-center font-bold text-lg border border-purple-500/20">👑</div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Founders / Staff</p>
-                        <h3 className="text-2xl font-black text-white">1</h3>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SUB-VISTA: MEMBROS */}
                   {subView === 'membros' && (
-                    <>
-                      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[#181b20] p-4 rounded-2xl border border-neutral-800/80 shadow-lg">
-                        <input 
-                          type="text"
-                          placeholder="Pesquisar por Nome In-Game, ID, Motivo..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full md:w-96 bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-red-600 transition"
-                        />
-                      </div>
-
-                      <div className="bg-[#181b20] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="border-b border-neutral-800 text-[10px] font-black uppercase text-neutral-400 bg-neutral-900/50">
-                              <th className="p-4">Membro</th>
-                              <th className="p-4">ID / Idade</th>
-                              <th className="p-4">Discord</th>
-                              <th className="p-4">Estado</th>
+                    <div className="bg-[#181b20] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-neutral-800 text-[10px] font-black uppercase text-neutral-400 bg-neutral-900/50">
+                            <th className="p-4">Membro</th>
+                            <th className="p-4">ID In-Game</th>
+                            <th className="p-4">Discord</th>
+                            <th className="p-4">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-800/60 text-xs">
+                          {usersList.map((m, index) => (
+                            <tr key={index} className="hover:bg-neutral-800/30 transition">
+                              <td className="p-4 flex items-center gap-3">
+                                <div className="w-9 h-9 bg-neutral-800 rounded-xl flex items-center justify-center font-bold text-red-500 border border-neutral-700">
+                                  {m.username ? m.username.charAt(0) : 'M'}
+                                </div>
+                                <p className="font-extrabold text-white">{m.username}</p>
+                              </td>
+                              <td className="p-4 font-mono text-neutral-300">ID: {m.idInGame || 'N/A'}</td>
+                              <td className="p-4 text-indigo-400 font-bold">{m.discordTag}</td>
+                              <td className="p-4"><span className="bg-emerald-950 text-emerald-400 px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold">{m.estado}</span></td>
                             </tr>
-                          </thead>
-                          <tbody className="divide-y divide-neutral-800/60 text-xs">
-                            {usersList.length > 0 ? (
-                              usersList.map((m, index) => (
-                                <tr key={index} className="hover:bg-neutral-800/30 transition">
-                                  <td className="p-4 flex items-center gap-3">
-                                    <div className="w-9 h-9 bg-neutral-800 rounded-xl flex items-center justify-center font-bold text-red-500 border border-neutral-700">
-                                      {m.username ? m.username.charAt(0) : 'M'}
-                                    </div>
-                                    <p className="font-extrabold text-white">{m.username || 'Membro'}</p>
-                                  </td>
-                                  <td className="p-4 font-mono text-neutral-300">ID: {m.idInGame || '27356'}</td>
-                                  <td className="p-4 text-indigo-400 font-bold">{m.discordTag || 'Não vinculado'}</td>
-                                  <td className="p-4">
-                                    <span className="bg-emerald-950 text-emerald-400 border border-emerald-800/40 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase">
-                                      {m.estado || 'aprovado'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td colSpan="4" className="p-8 text-center text-neutral-500">
-                                  A carregar base de dados do Firestore...
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
 
-                  {/* SUB-VISTA: CANDIDATURAS PENDENTES */}
                   {subView === 'candidaturas' && (
                     <div className="bg-[#181b20] border border-neutral-800/80 rounded-3xl p-8 space-y-6 shadow-2xl">
-                      <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
-                        <div>
-                          <h2 className="text-xl font-black text-white">⏳ Candidaturas Pendentes</h2>
-                          <p className="text-xs text-neutral-400">Analisa e aprova novos membros para a gang Magnatas 01.</p>
-                        </div>
-                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-xl text-xs font-bold">
-                          Total: {candidaturas.length}
-                        </span>
-                      </div>
-
+                      <h2 className="text-xl font-black text-white">⏳ Candidaturas Pendentes</h2>
                       {candidaturas.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-4">
-                          {candidaturas.map((cand) => (
-                            <div key={cand.id} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-3">
-                                  <h3 className="font-extrabold text-white text-base">{cand.nome}</h3>
-                                  <span className="text-[10px] bg-neutral-800 px-2.5 py-0.5 rounded-md font-mono text-indigo-400">ID In-Game: {cand.idInGame}</span>
-                                  <span className="text-[10px] bg-neutral-800 px-2.5 py-0.5 rounded-md text-neutral-300">{cand.idade}</span>
-                                </div>
-                                <p className="text-xs text-neutral-400 italic">"{cand.motivo}"</p>
-                              </div>
-                              <div className="flex gap-3 w-full md:w-auto">
-                                <button 
-                                  onClick={() => handleAprovarCandidatura(cand.id)}
-                                  className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition"
-                                >
-                                  ✅ Aprovar
-                                </button>
-                                <button 
-                                  onClick={() => handleRejeitarCandidatura(cand.id)}
-                                  className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition"
-                                >
-                                  ❌ Rejeitar
-                                </button>
-                              </div>
+                        candidaturas.map((cand) => (
+                          <div key={cand.id} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex justify-between items-center gap-4">
+                            <div>
+                              <h3 className="font-extrabold text-white text-base">{cand.nome} (ID: {cand.idInGame})</h3>
+                              <p className="text-xs text-neutral-400 italic mt-1">"{cand.motivo}"</p>
                             </div>
-                          ))}
-                        </div>
+                            <div className="flex gap-3">
+                              <button onClick={() => handleAprovarCandidatura(cand.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold">✅ Aprovar</button>
+                              <button onClick={() => handleRejeitarCandidatura(cand.id)} className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold">❌ Rejeitar</button>
+                            </div>
+                          </div>
+                        ))
                       ) : (
-                        <div className="p-12 text-center text-neutral-500">
-                          🎉 Não existem candidaturas pendentes de momento!
-                        </div>
+                        <p className="text-center text-neutral-500 py-8">Não há candidaturas pendentes.</p>
                       )}
                     </div>
                   )}
                 </>
-              )}
-
-              {currentView === 'radios' && (
-                <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
-                  <h2 className="text-xl font-bold text-white">📻 Frequências de Comunicação da Gang</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {radios.map(r => (
-                      <div key={r.id} className="p-5 bg-neutral-900 rounded-2xl border border-neutral-800 flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-white">{r.nome}</p>
-                          <p className="text-xs text-indigo-400 font-mono mt-1">{r.freq}</p>
-                        </div>
-                        <span className="bg-emerald-950 text-emerald-400 text-[10px] px-3 py-1 rounded-lg border border-emerald-800 font-bold">{r.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {currentView === 'upgrade' && (
-                <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6 max-w-2xl mx-auto">
-                  <h2 className="text-xl font-bold text-white">⭐ Pedido de Promoção / Cargo</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-xs text-neutral-400 font-bold block mb-2">Cargo Pretendido</label>
-                      <select className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
-                        <option>01 Leader´s</option>
-                        <option>Resp. Manager´s</option>
-                        <option>Staff ATHOS PvP</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-neutral-400 font-bold block mb-2">Motivo / Ações Realizadas</label>
-                      <textarea placeholder="Explica a razão do pedido..." className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28"></textarea>
-                    </div>
-                    <button onClick={() => alert('Pedido submetido para a Staff!')} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg">
-                      Enviar Pedido de Promoção
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {currentView === 'admin' && (
-                <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
-                  <h2 className="text-xl font-bold text-amber-500">⚙️ Log de Auditoria & Painel da Staff</h2>
-                  <div className="space-y-3">
-                    {auditLogs.map(log => (
-                      <div key={log.id} className="p-4 bg-neutral-900 rounded-2xl border border-neutral-800 flex justify-between items-center text-xs">
-                        <div>
-                          <p className="font-bold text-white">{log.acao} em <span className="text-indigo-400">{log.alvo}</span></p>
-                          <p className="text-[10px] text-neutral-500">Executado por: {log.mod}</p>
-                        </div>
-                        <span className="text-[10px] text-neutral-400 bg-neutral-800 px-2.5 py-1 rounded-lg">{log.data}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {currentView === 'perfil' && (
-                <div className="max-w-2xl mx-auto bg-[#181b20] border border-neutral-800 p-8 rounded-3xl shadow-xl space-y-6">
-                  <div className="flex items-center gap-6">
-                    <img src={user.avatar} alt="Avatar" className="w-20 h-20 rounded-2xl border-2 border-red-500 shadow-md object-cover" />
-                    <div>
-                      <h2 className="text-xl font-bold text-white">{user.username}</h2>
-                      <p className="text-xs text-neutral-400">{user.discordTag}</p>
-                      <span className="mt-2 inline-block text-[10px] bg-indigo-950 text-indigo-400 border border-indigo-800/50 px-2.5 py-0.5 rounded-md font-mono">
-                        ID Discord: {user.id}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="pt-6 border-t border-neutral-800">
-                    <h3 className="text-sm font-bold text-white mb-3">Sincronização com o Bot</h3>
-                    <button 
-                      onClick={handleForceSync}
-                      disabled={syncLoading}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg shadow-red-600/20 transition"
-                    >
-                      {syncLoading ? 'A processar...' : '🔄 Forçar Sincronização de Cargos'}
-                    </button>
-                    {syncMessage && (
-                      <p className="text-xs text-center mt-3 text-emerald-400 font-bold">{syncMessage}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {!['gestao', 'radios', 'upgrade', 'admin', 'perfil'].includes(currentView) && (
-                <div className="bg-[#181b20] border border-neutral-800 p-12 rounded-3xl text-center shadow-xl">
-                  <h2 className="text-2xl font-black mb-2 text-white uppercase tracking-wider">Secção: {currentView}</h2>
-                  <p className="text-xs text-neutral-400 mb-6">Esta funcionalidade está sincronizada com a base de dados do Magnatas 01.</p>
-                  <button onClick={() => setCurrentView('gestao')} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg transition">
-                    Voltar à Base da Gang
-                  </button>
-                </div>
               )}
             </>
           )}
