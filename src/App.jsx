@@ -46,7 +46,7 @@ export default function App() {
   const [usersList, setUsersList] = useState([]);
   const [roupas, setRoupas] = useState([]);
   const [regras, setRegras] = useState([]);
-  const [radios, setRadios] = useState({ principal: { frequencia: '100.0', info: 'Rádio Principal' }, alternativa: { frequencia: '105.5', info: 'Rádio Secundária' } });
+  const [radiosList, setRadiosList] = useState([]);
   const [logsList, setLogsList] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRoleModalUser, setActiveRoleModalUser] = useState(null);
@@ -55,9 +55,8 @@ export default function App() {
   const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
   const [formPerfil, setFormPerfil] = useState({ avatar: '', biografia: '' });
   const [formRoupa, setFormRoupa] = useState({ nome: '', numero: '', imagem: '' });
-  const [formRegra, setFormRegra] = useState({ titulo: '', descricao: '', ordem: 1 });
-  const [formRadio, setFormRadio] = useState({ principalFreq: '', alternativaFreq: '' });
-  const [formPunicao, setFormPunicao] = useState({ targetUserId: '', tipo: 'Warning', tempo: '', motivo: '' });
+  const [formRadio, setFormRadio] = useState({ titulo: '', frequencia: '', info: '' });
+  const [formPunicao, setFormPunicao] = useState({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
   const [formNota, setFormNota] = useState({ targetUserId: '', nota: '' });
 
   useEffect(() => {
@@ -101,8 +100,10 @@ export default function App() {
       snap.forEach(d => r.push({ id: d.id, ...d.data() }));
       setRoupas(r);
     });
-    const unsubRadios = onSnapshot(collection(db, 'config'), (snap) => {
-      snap.forEach(d => { if (d.id === 'radios') setRadios(d.data()); });
+    const unsubRadios = onSnapshot(collection(db, 'radios'), (snap) => {
+      let rads = [];
+      snap.forEach(d => rads.push({ id: d.id, ...d.data() }));
+      setRadiosList(rads);
     });
     const qRegras = query(collection(db, 'regras'), orderBy('ordem', 'asc'));
     const unsubRegras = onSnapshot(qRegras, (snap) => {
@@ -179,6 +180,16 @@ export default function App() {
   const userRoles = userDoc?.roles || [];
   const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER");
 
+  // Função auxiliar para carregar foto de ficheiro local (PC)
+  const handleFileUpload = (e, callback) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => callback(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Ações de Perfil
   const handleSavePerfil = async (e) => {
     e.preventDefault();
@@ -208,13 +219,13 @@ export default function App() {
     await addLog("Reprovação", `Reprovou a candidatura de ${targetUser.username}`);
   };
 
-  // Ações do Owner (Editar Roupas, Rádio, Regras)
+  // Ações de Roupas
   const handleAddRoupa = async (e) => {
     e.preventDefault();
-    if (!isFounder) return alert("Apenas o Owner/Founder pode editar!");
+    if (!isFounder) return alert("Apenas o Owner/Founder pode adicionar roupas!");
     await addDoc(collection(db, 'roupas'), formRoupa);
     setFormRoupa({ nome: '', numero: '', imagem: '' });
-    await addLog("Roupas", `Adicionou kit ${formRoupa.nome}`);
+    await addLog("Roupas", `Adicionou roupa/kit ${formRoupa.nome}`);
   };
 
   const handleDeleteRoupa = async (id) => {
@@ -222,31 +233,22 @@ export default function App() {
     await deleteDoc(doc(db, 'roupas', id));
   };
 
-  const handleSaveRadios = async (e) => {
+  // Ações de Rádio
+  const handleAddRadio = async (e) => {
     e.preventDefault();
     if (!isFounder) return;
-    await setDoc(doc(db, 'config', 'radios'), {
-      principal: { frequencia: formRadio.principalFreq || radios.principal.frequencia, info: 'Rádio Principal' },
-      alternativa: { frequencia: formRadio.alternativaFreq || radios.alternativa.frequencia, info: 'Rádio Secundária' }
-    });
-    alert("Frequências atualizadas!");
-    await addLog("Rádio", "Atualizou as frequências oficiais");
+    await addDoc(collection(db, 'radios'), formRadio);
+    setFormRadio({ titulo: '', frequencia: '', info: '' });
+    await addLog("Rádio", `Adicionou/Editar rádio ${formRadio.titulo}`);
   };
 
-  const handleAddRegra = async (e) => {
-    e.preventDefault();
+  const handleDeleteRadio = async (id) => {
     if (!isFounder) return;
-    await addDoc(collection(db, 'regras'), { ...formRegra, ordem: Number(formRegra.ordem) });
-    setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 1 });
-    await addLog("Regras", `Adicionou a regra: ${formRegra.titulo}`);
+    await deleteDoc(doc(db, 'radios', id));
+    await addLog("Rádio", "Eliminou uma frequência de rádio");
   };
 
-  const handleDeleteRegra = async (id) => {
-    if (!isFounder) return;
-    await deleteDoc(doc(db, 'regras', id));
-  };
-
-  // Ações de Punição e Notas Internas
+  // Ações de Punição
   const handleAplicarPunicao = async (e) => {
     e.preventDefault();
     if (!formPunicao.targetUserId) return alert("Seleciona um membro!");
@@ -254,6 +256,7 @@ export default function App() {
     if (!target) return;
 
     const novaPunicao = {
+      id: Date.now(),
       tipo: formPunicao.tipo,
       tempo: formPunicao.tempo,
       motivo: formPunicao.motivo,
@@ -270,23 +273,9 @@ export default function App() {
       estado: novoEstado
     });
 
-    alert("Punição aplicada!");
+    alert("Punição aplicada com sucesso!");
     await addLog("Punição", `Aplicou ${formPunicao.tipo} a ${target.username}`);
-    setFormPunicao({ targetUserId: '', tipo: 'Warning', tempo: '', motivo: '' });
-  };
-
-  const handleAddNotaInterna = async (e) => {
-    e.preventDefault();
-    if (!formNota.targetUserId || !formNota.nota) return;
-    const target = usersList.find(u => u.id === formNota.targetUserId);
-    const notasAtuais = target?.notasInternas || [];
-
-    await updateDoc(doc(db, 'users', target.id), {
-      notasInternas: [...notasAtuais, { autor: user.username, texto: formNota.nota, data: new Date().toLocaleDateString() }]
-    });
-
-    alert("Nota interna guardada!");
-    setFormNota({ targetUserId: '', nota: '' });
+    setFormPunicao({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
   };
 
   const handleToggleRole = async (targetId, roleName) => {
@@ -352,7 +341,6 @@ export default function App() {
     );
   }
 
-  // Filtros da Base da Gang
   const membrosBase = usersList.filter(m => {
     const matchesSearch = (m.nomeInGame || '').toLowerCase().includes(searchQuery.toLowerCase()) || (m.username || '').toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
@@ -377,8 +365,8 @@ export default function App() {
             <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'base' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👥</span> Base da Gang</button>
             <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👕</span> Roupas & Kits</button>
             <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'radio' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📡</span> Frequências Rádio</button>
-            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'regras' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📖</span> Regras Oficiais</button>
             <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>🎖️</span> Lista de Cargos</button>
+            <button onClick={() => setCurrentView('meusavisos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'meusavisos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>⚠️</span> Meus Avisos / Punições</button>
             <button onClick={() => setCurrentView('perfil')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'perfil' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👤</span> Meu Perfil & Discord</button>
           </nav>
         </div>
@@ -393,14 +381,12 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-neutral-800/80 bg-[#121418] px-8 flex justify-between items-center sticky top-0 z-30">
           <h1 className="font-black text-sm uppercase tracking-wider text-red-600">MAGNATAS 01! &bull; {currentView.toUpperCase()}</h1>
-          <div className="flex items-center gap-2">
-            <button onClick={handleLogout} title="Sair" className="text-neutral-500 hover:text-red-500 text-sm font-bold">🚪 Sair</button>
-          </div>
+          <button onClick={handleLogout} className="text-neutral-500 hover:text-red-500 text-sm font-bold">🚪 Sair</button>
         </header>
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
 
-          {/* 1. BASE DA GANG (Membros Ativos, Destaque, Ausentes, Banidos) */}
+          {/* BASE DA GANG */}
           {currentView === 'base' && (
             <div className="space-y-6">
               <div className="flex items-center gap-2 border-b border-neutral-800 pb-4">
@@ -447,13 +433,86 @@ export default function App() {
             </div>
           )}
 
-          {/* 2. LISTA DE TODOS OS CARGOS DO SERVIDOR */}
+          {/* ROUPAS & KITS (Número em Destaque + Upload do PC / URL) */}
+          {currentView === 'roupas' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Roupas & Kits Oficiais</h2>
+              {isFounder && (
+                <form onSubmit={handleAddRoupa} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Novo Kit (Apenas Owner)</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <input type="text" placeholder="Nome do Kit / Roupa" value={formRoupa.nome} onChange={e => setFormRoupa({...formRoupa, nome: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="text" placeholder="Número no Vestuário (ex: #145)" value={formRoupa.numero} onChange={e => setFormRoupa({...formRoupa, numero: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="url" placeholder="Link da Imagem (URL)" value={formRoupa.imagem} onChange={e => setFormRoupa({...formRoupa, imagem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-neutral-400 font-bold block mb-1">Ou carregar foto do Computador (PC):</label>
+                    <input type="file" accept="image/*" onChange={e => handleFileUpload(e, (res) => setFormRoupa({...formRoupa, imagem: res}))} className="text-xs text-neutral-400 bg-neutral-900 p-2 rounded-xl w-full border border-neutral-800" />
+                  </div>
+                  <button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase">Guardar Kit</button>
+                </form>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {roupas.map(item => (
+                  <div key={item.id} className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-hidden shadow-xl space-y-3 relative group">
+                    <img src={item.imagem || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-full h-48 object-cover" />
+                    <div className="p-4 flex justify-between items-center">
+                      <div>
+                        <h4 className="font-black text-white text-sm">{item.nome}</h4>
+                        <span className="inline-block bg-red-600/20 text-red-400 border border-red-600/40 text-xs font-black px-2.5 py-1 rounded-lg mt-1">
+                          NÚMERO: #{item.numero}
+                        </span>
+                      </div>
+                      {isFounder && <button onClick={() => handleDeleteRoupa(item.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900">Remover</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* FREQUÊNCIAS RÁDIO (Eliminar, Adicionar e Editar Mensagens/Freqs) */}
+          {currentView === 'radio' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Frequências Rádio</h2>
+              {isFounder && (
+                <form onSubmit={handleAddRadio} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4 max-w-xl">
+                  <h3 className="text-xs font-black text-amber-500 uppercase">Gerir Frequência Rádio (Adicionar / Editar)</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="text" placeholder="Título (ex: Rádio Principal)" value={formRadio.titulo} onChange={e => setFormRadio({...formRadio, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="text" placeholder="Frequência (ex: 100.0)" value={formRadio.frequencia} onChange={e => setFormRadio({...formRadio, frequencia: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                  </div>
+                  <input type="text" placeholder="Informação / Nota..." value={formRadio.info} onChange={e => setFormRadio({...formRadio, info: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                  <button type="submit" className="bg-amber-600 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase">Publicar / Atualizar Rádio</button>
+                </form>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {radiosList.map(rad => (
+                  <div key={rad.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-black text-red-500 uppercase">{rad.titulo}: {rad.frequencia} MHz</h3>
+                      <p className="text-xs text-neutral-400">{rad.info}</p>
+                    </div>
+                    {isFounder && (
+                      <button onClick={() => handleDeleteRadio(rad.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900">
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* LISTA DE CARGOS */}
           {currentView === 'cargos' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Todos os Cargos do Servidor</h2>
+              <h2 className="text-xl font-black text-white">Lista Completa de Cargos do Servidor</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {ALL_ROLES.map(role => (
-                  <div key={role.name} className="bg-[#121418] border border-neutral-800 p-5 rounded-2xl flex justify-between items-center shadow-lg">
+                  <div key={role.name} className="bg-[#121418] border border-neutral-800 p-5 rounded-2xl flex justify-between items-center">
                     <span className={`px-3 py-1 rounded-lg text-xs font-black border uppercase ${role.color}`}>{role.name}</span>
                     <span className="text-xs bg-neutral-900 px-3 py-1 rounded-full text-neutral-400 font-bold">
                       {usersList.filter(u => (u.roles || []).includes(role.name)).length} membros
@@ -464,94 +523,38 @@ export default function App() {
             </div>
           )}
 
-          {/* 3. ROUPAS (Com Edição Owner) */}
-          {currentView === 'roupas' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Roupas & Kits</h2>
-              {isFounder && (
-                <form onSubmit={handleAddRoupa} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Kit (Apenas Owner)</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <input type="text" placeholder="Nome" value={formRoupa.nome} onChange={e => setFormRoupa({...formRoupa, nome: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <input type="text" placeholder="Número" value={formRoupa.numero} onChange={e => setFormRoupa({...formRoupa, numero: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <input type="url" placeholder="Link Imagem" value={formRoupa.imagem} onChange={e => setFormRoupa({...formRoupa, imagem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                  </div>
-                  <button type="submit" className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs uppercase">Guardar Kit</button>
-                </form>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {roupas.map(item => (
-                  <div key={item.id} className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-hidden shadow-xl space-y-3">
-                    <img src={item.imagem} className="w-full h-48 object-cover" />
-                    <div className="p-4 flex justify-between items-center">
-                      <h4 className="font-bold text-white text-xs">{item.nome} — #{item.numero}</h4>
-                      {isFounder && <button onClick={() => handleDeleteRoupa(item.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1 rounded-lg">Remover</button>}
+          {/* MEUS AVISOS / PUNIÇÕES (Visível para o próprio Player) */}
+          {currentView === 'meusavisos' && (
+            <div className="space-y-6 max-w-2xl mx-auto">
+              <h2 className="text-xl font-black text-white flex items-center gap-2">⚠️ Meus Avisos / Histórico de Punições</h2>
+              
+              {userDoc?.punicoes && userDoc.punicoes.length > 0 ? (
+                <div className="space-y-4">
+                  {userDoc.punicoes.map((p, idx) => (
+                    <div key={idx} className="bg-[#121418] border border-red-900/60 p-6 rounded-2xl space-y-2">
+                      <div className="flex justify-between items-center border-b border-neutral-800 pb-2">
+                        <span className="text-xs font-black text-red-500 uppercase">{p.tipo}</span>
+                        <span className="text-[10px] text-neutral-500">{p.data}</span>
+                      </div>
+                      <p className="text-xs text-neutral-300"><strong>Motivo:</strong> {p.motivo}</p>
+                      <p className="text-xs text-neutral-400"><strong>Duração:</strong> {p.tempo || 'N/A'}</p>
+                      <p className="text-[10px] text-neutral-500">Aplicado por: {p.aplicadoPor}</p>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 4. RÁDIO (Com Edição Owner) */}
-          {currentView === 'radio' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Frequências de Rádio</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-2">
-                  <h3 className="text-sm font-black text-red-500 uppercase">Rádio Principal: {radios.principal?.frequencia} MHz</h3>
-                  <p className="text-xs text-neutral-400">Usada para formações e patrulhas ativas.</p>
+                  ))}
                 </div>
-                <div className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-2">
-                  <h3 className="text-sm font-black text-amber-500 uppercase">Rádio Secundária: {radios.alternativa?.frequencia} MHz</h3>
-                  <p className="text-xs text-neutral-400">Usada para comunicações de reserva.</p>
+              ) : (
+                <div className="p-6 bg-emerald-950/40 border border-emerald-900/60 rounded-2xl text-emerald-400 text-xs font-bold text-center">
+                  ✓ Excelente! Não tens avisos ou punições registadas no teu perfil.
                 </div>
-              </div>
-              {isFounder && (
-                <form onSubmit={handleSaveRadios} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4 max-w-md">
-                  <h3 className="text-xs font-black text-amber-400 uppercase">Editar Frequências (Apenas Owner)</h3>
-                  <input type="text" placeholder="Nova Freq. Principal (ex: 100.0)" onChange={e => setFormRadio({...formRadio, principalFreq: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
-                  <input type="text" placeholder="Nova Freq. Secundária (ex: 105.5)" onChange={e => setFormRadio({...formRadio, alternativaFreq: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
-                  <button type="submit" className="w-full bg-amber-600 text-white font-bold py-3 rounded-xl text-xs uppercase">Atualizar Rádios</button>
-                </form>
               )}
             </div>
           )}
 
-          {/* 5. REGRAS (Com Edição Owner) */}
-          {currentView === 'regras' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Regras Oficiais</h2>
-              {isFounder && (
-                <form onSubmit={handleAddRegra} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-black text-red-500 uppercase">Nova Regra (Apenas Owner)</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="text" placeholder="Título da Regra" value={formRegra.titulo} onChange={e => setFormRegra({...formRegra, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <input type="number" placeholder="Ordem" value={formRegra.ordem} onChange={e => setFormRegra({...formRegra, ordem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                  </div>
-                  <textarea placeholder="Descrição da Regra..." value={formRegra.descricao} onChange={e => setFormRegra({...formRegra, descricao: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-20" required></textarea>
-                  <button type="submit" className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs uppercase">Publicar Regra</button>
-                </form>
-              )}
-              <div className="space-y-4">
-                {regras.map((r, i) => (
-                  <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start">
-                    <div>
-                      <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
-                      <p className="text-xs text-neutral-400 mt-1">{r.descricao}</p>
-                    </div>
-                    {isFounder && <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1 rounded">Remover</button>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 6. MEU PERFIL & DISCORD (Foto + Biografia) */}
+          {/* MEU PERFIL & DISCORD (Carregar Foto do PC ou URL + Biografia) */}
           {currentView === 'perfil' && (
             <div className="max-w-xl mx-auto bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-6">
               <div className="flex items-center gap-4 border-b border-neutral-800 pb-6">
-                <img src={userDoc?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-16 h-16 rounded-full border-2 border-red-600" />
+                <img src={formPerfil.avatar || userDoc?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-16 h-16 rounded-full border-2 border-red-600 object-cover" />
                 <div>
                   <h3 className="text-lg font-black text-white">{userDoc?.nomeInGame || user.username}</h3>
                   <p className="text-xs text-neutral-400">@{user.username}</p>
@@ -561,30 +564,32 @@ export default function App() {
 
               <form onSubmit={handleSavePerfil} className="space-y-4">
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">URL do Avatar (Foto)</label>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1">URL do Avatar (Link de Imagem):</label>
                   <input type="url" placeholder="https://..." value={formPerfil.avatar} onChange={e => setFormPerfil({...formPerfil, avatar: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">Biografia</label>
-                  <textarea placeholder="Escreve algo sobre ti..." value={formPerfil.biografia} onChange={e => setFormPerfil({...formPerfil, biografia: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24"></textarea>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1">Ou Carregar foto do Computador (PC):</label>
+                  <input type="file" accept="image/*" onChange={e => handleFileUpload(e, (res) => setFormPerfil({...formPerfil, avatar: res}))} className="text-xs text-neutral-400 bg-neutral-900 p-2 rounded-xl w-full border border-neutral-800" />
                 </div>
-                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Guardar Perfil</button>
+                <div>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1">Biografia</label>
+                  <textarea placeholder="Escreve a tua biografia..." value={formPerfil.biografia} onChange={e => setFormPerfil({...formPerfil, biografia: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24"></textarea>
+                </div>
+                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Guardar Alterações do Perfil</button>
               </form>
             </div>
           )}
 
-          {/* 7. PAINEL ADMIN COMPLETO (Candidaturas, Punições, Notas Internas, Logs) */}
+          {/* PAINEL ADMIN COMPLETO */}
           {currentView === 'admin' && (
             <div className="space-y-6">
-              <div className="flex gap-2 border-b border-neutral-800 pb-4">
-                <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⏳ Candidaturas Pendentes</button>
+              <div className="flex gap-2 border-b border-neutral-800 pb-4 overflow-x-auto">
+                <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⏳ Candidaturas</button>
                 <button onClick={() => setAdminTab('cargos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'cargos' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>🎖️ Gestão de Cargos</button>
-                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Aplicar Punição</button>
-                <button onClick={() => setAdminTab('notas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'notas' ? 'bg-blue-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📝 Notas Internas</button>
-                <button onClick={() => setAdminTab('logs')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'logs' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📜 Logs do Sistema</button>
+                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Aplicar Punições</button>
+                <button onClick={() => setAdminTab('logs')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'logs' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📜 Logs</button>
               </div>
 
-              {/* Sub-painel: Candidaturas Pendentes */}
               {adminTab === 'candidaturas' && (
                 <div className="space-y-4">
                   {usersList.filter(u => u.estado === 'pendente_analise').length === 0 ? (
@@ -606,7 +611,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Sub-painel: Gestão de Cargos */}
               {adminTab === 'cargos' && (
                 <div className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-visible shadow-2xl">
                   <table className="w-full text-left text-xs">
@@ -650,7 +654,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Sub-painel: Punições */}
               {adminTab === 'punicoes' && (
                 <form onSubmit={handleAplicarPunicao} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl max-w-lg space-y-4">
                   <h3 className="text-sm font-black text-red-500 uppercase">Aplicar Punição a Membro</h3>
@@ -659,7 +662,7 @@ export default function App() {
                     {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username} (@{u.username})</option>)}
                   </select>
                   <select value={formPunicao.tipo} onChange={e => setFormPunicao({...formPunicao, tipo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
-                    <option value="Warning">Warning 1</option>
+                    <option value="Warning 1">Warning 1</option>
                     <option value="Warning 2">Warning 2</option>
                     <option value="Muted">Mute Temporário</option>
                     <option value="Ban Temporário">Ban Temporário</option>
@@ -671,35 +674,6 @@ export default function App() {
                 </form>
               )}
 
-              {/* Sub-painel: Notas Internas */}
-              {adminTab === 'notas' && (
-                <div className="space-y-6">
-                  <form onSubmit={handleAddNotaInterna} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl max-w-lg space-y-4">
-                    <h3 className="text-sm font-black text-blue-400 uppercase">Adicionar Nota Interna (Privada)</h3>
-                    <select value={formNota.targetUserId} onChange={e => setFormNota({...formNota, targetUserId: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required>
-                      <option value="">Seleciona o membro...</option>
-                      {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username}</option>)}
-                    </select>
-                    <textarea placeholder="Nota confidencial da Staff..." value={formNota.nota} onChange={e => setFormNota({...formNota, nota: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-                    <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase">Guardar Nota</button>
-                  </form>
-
-                  <div className="space-y-3">
-                    {usersList.filter(u => u.notasInternas?.length > 0).map(u => (
-                      <div key={u.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-2">
-                        <h4 className="font-bold text-white text-xs">Membro: {u.nomeInGame || u.username}</h4>
-                        {u.notasInternas.map((n, idx) => (
-                          <div key={idx} className="bg-neutral-900 p-3 rounded-xl text-xs text-neutral-300">
-                            <span className="text-blue-400 font-bold">{n.autor}:</span> {n.texto} <span className="text-[10px] text-neutral-500">({n.data})</span>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Sub-painel: Logs do Sistema */}
               {adminTab === 'logs' && (
                 <div className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-3 max-h-96 overflow-y-auto">
                   {logsList.map(l => (
@@ -712,6 +686,7 @@ export default function App() {
               )}
             </div>
           )}
+
         </main>
       </div>
     </div>
