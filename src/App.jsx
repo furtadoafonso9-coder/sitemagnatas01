@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
+import { db } from './firebase';
 import { 
-  getFirestore, 
   collection, 
   onSnapshot, 
   doc, 
@@ -10,38 +9,19 @@ import {
   updateDoc 
 } from 'firebase/firestore';
 
-// ==========================================
-// CONFIGURAÇÃO REAL DO FIREBASE (SÓ FIRESTORE)
-// ==========================================
-const firebaseConfig = {
-  apiKey: "AIzaSyCstl872xKUcdUwX5aQVFMkpo8v-R-9EoE",
-  authDomain: "sitemagnatas01.firebaseapp.com",
-  projectId: "sitemagnatas01",
-  storageBucket: "sitemagnatas01.firebasestorage.app",
-  messagingSenderId: "848648566155",
-  appId: "1:848648566155:web:024e93ea5dcecaaef86b8e",
-  measurementId: "G-Q57NRPGDVE"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// ==========================================
-// OAUTH2 DO DISCORD (SEM DEPENDÊNCIA DE BACKEND/AUTH)
-// ==========================================
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
 const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userStatus, setUserStatus] = useState('pendente_candidatura'); // 'pendente_candidatura', 'pendente_analise', 'aprovado'
+  const [userStatus, setUserStatus] = useState('pendente_candidatura'); 
   const [currentView, setCurrentView] = useState('gestao');
   const [usersList, setUsersList] = useState([]);
   
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
-  // Captura do Token na URL e Limpeza Imediata
+  // Processa o login do Discord via Hash na URL (#access_token)
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -50,7 +30,7 @@ export default function App() {
       const fragment = new URLSearchParams(hash.slice(1));
       const accessToken = fragment.get('access_token');
 
-      // Limpa a URL imediatamente para que a Vercel/Navegador não tente reprocessar a rota
+      // Limpa a URL imediatamente
       window.history.replaceState({}, document.title, window.location.pathname);
 
       if (accessToken) {
@@ -72,7 +52,7 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // Grava ou consulta o estado do utilizador no Firestore
+            // Grava/Verifica Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -91,7 +71,7 @@ export default function App() {
             }
           }
         })
-        .catch(err => console.error("Erro ao validar token com a API do Discord:", err));
+        .catch(err => console.error("Erro no perfil do Discord:", err));
       }
     } else if (savedUser) {
       try {
@@ -108,7 +88,7 @@ export default function App() {
     }
   }, []);
 
-  // Sincronização dos Membros em Tempo Real
+  // Leitura em tempo real
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -116,7 +96,7 @@ export default function App() {
         members.push({ id: docSnap.id, ...docSnap.data() });
       });
       setUsersList(members);
-    }, (err) => console.error("Erro na escuta do Firestore:", err));
+    }, (err) => console.error("Erro no Firestore:", err));
     
     return () => unsubscribe();
   }, []);
@@ -161,7 +141,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
       
-      {/* 🛡️ SIDEBAR SÓ FICA VISÍVEL SE ESTIVER APROVADO */}
+      {/* 🛡️ SIDEBAR: SÓ FICA VISÍVEL SE O MEMBRO TIVER ESTADO 'aprovado' */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
