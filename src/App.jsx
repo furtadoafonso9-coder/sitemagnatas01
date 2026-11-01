@@ -18,10 +18,9 @@ export default function App() {
   const [userStatus, setUserStatus] = useState('pendente_candidatura'); 
   const [currentView, setCurrentView] = useState('gestao');
   const [usersList, setUsersList] = useState([]);
-  
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
-  // 1. Processa o token do Discord na URL após o login
+  // Captura o token do Discord na URL e limpa-a de imediato
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -30,7 +29,6 @@ export default function App() {
       const fragment = new URLSearchParams(hash.slice(1));
       const accessToken = fragment.get('access_token');
 
-      // Limpa imediatamente a URL para evitar conflitos
       window.history.replaceState({}, document.title, window.location.pathname);
 
       if (accessToken) {
@@ -52,7 +50,6 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // Sincroniza o utilizador no Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -71,7 +68,7 @@ export default function App() {
             }
           }
         })
-        .catch(err => console.error("Erro ao obter dados do Discord:", err));
+        .catch(err => console.error("Erro no perfil do Discord:", err));
       }
     } else if (savedUser) {
       try {
@@ -88,7 +85,7 @@ export default function App() {
     }
   }, []);
 
-  // 2. Lê os membros em tempo real do Firestore
+  // Escuta os membros em tempo real no Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -141,7 +138,6 @@ export default function App() {
     alert('Candidatura rejeitada.');
   };
 
-  // Se for rejeitado, limpa para tentar novamente
   const handleTentarNovamente = async () => {
     const userRef = doc(db, 'users', user.id);
     await updateDoc(userRef, { 
@@ -158,7 +154,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
       
-      {/* 🛡️ SIDEBAR SÓ APARECE QUANDO O UTILIZADOR ESTIVER APROVADO */}
+      {/* 🛡️ SIDEBAR SÓ APARECE PARA MEMBROS APROVADOS */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -206,11 +202,11 @@ export default function App() {
             /* 2. ECRÃ DE ESPERA (EM ANÁLISE) */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">⏳</div>
-              <h2 className="test-xl font-black text-white">Candidatura em Análise</h2>
+              <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
               <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
             </div>
           ) : userStatus === 'rejeitado' ? (
-            /* 3. ECRÃ DE REJEITADO (COM OPÇÃO DE REFAZER/TENTAR NOVAMENTE) */
+            /* 3. ECRÃ DE REJEITADO COM OPÇÃO DE REFAZER */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-red-600/10 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">❌</div>
               <h2 className="text-xl font-black text-white">Candidatura Rejeitada</h2>
@@ -223,7 +219,7 @@ export default function App() {
               </button>
             </div>
           ) : userStatus === 'aprovado' ? (
-            /* 4. PAINEL COMPLETO PARA UTILIZADORES APROVADOS */
+            /* 4. PAINEL DE MEMBROS APROVADOS */
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
               <div className="bg-[#181b20] border border-neutral-800 rounded-2xl overflow-hidden p-6">
@@ -265,7 +261,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* 5. FORMULÁRIO DE CANDIDATURA SIMPLES (LOGO APÓS O LOGIN DO DISCORD) */
+            /* 5. FORMULÁRIO DE CANDIDATURA SIMPLES */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <h2 className="text-xl font-black text-white text-center">Formulário de Candidatura</h2>
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
@@ -291,7 +287,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">Motivo de Entrada</label>
+                  <label className="text-xs text-neutral-400 font-bold block gib-1.5">Motivo de Entrada</label>
                   <textarea 
                     placeholder="Explica a tua motivação..."
                     value={formCandidatura.motivo}
