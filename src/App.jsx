@@ -8,8 +8,10 @@ import {
   setDoc,
   updateDoc 
 } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
 
+// ==========================================
+// CONFIGURAÇÃO REAL DO FIREBASE (MAGNATAS 01)
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCstl872xKUcdUwX5aQVFMkpo8v-R-9EoE",
   authDomain: "sitemagnatas01.firebaseapp.com",
@@ -22,12 +24,23 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
 
-// CONFIGURAÇÃO EXATA DO OAUTH2
-const DISCORD_CLIENT_ID = "1544523627846025296"; 
-const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app/";
-const DISCORD_AUTH_URL = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=identify+guilds+email`;
+// ==========================================
+// CONFIGURAÇÃO OAUTH2 DISCORD (CORRIGIDA NATIVAMENTE)
+// ==========================================
+const DISCORD_CLIENT_ID = "1544523627846025296";
+// URL de redirecionamento exata sem barras extras
+const BASE_REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
+
+const getDiscordAuthUrl = () => {
+  const params = new URLSearchParams({
+    client_id: DISCORD_CLIENT_ID,
+    redirect_uri: BASE_REDIRECT_URI,
+    response_type: 'token',
+    scope: 'identify email guilds'
+  });
+  return `https://discord.com/oauth2/authorize?${params.toString()}`;
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -55,6 +68,7 @@ export default function App() {
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
   ]);
 
+  // Captura do Token do Discord na URL
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
@@ -72,14 +86,16 @@ export default function App() {
             const profile = {
               id: discordUser.id,
               username: discordUser.username,
-              avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png",
+              avatar: discordUser.avatar 
+                ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` 
+                : "https://cdn.discordapp.com/embed/avatars/0.png",
               discordTag: `@${discordUser.username}`
             };
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
             const userRef = doc(db, 'users', discordUser.id);
-            const initialData = {
+            await setDoc(userRef, {
               discordId: discordUser.id,
               username: discordUser.username,
               discordTag: profile.discordTag,
@@ -89,8 +105,7 @@ export default function App() {
               estado: 'aprovado',
               roles: ['01 Member´s'],
               lastLogin: new Date().toISOString()
-            };
-            await setDoc(userRef, initialData, { merge: true });
+            }, { merge: true });
           }
         })
         .catch(err => console.error("Erro ao obter perfil Discord:", err));
@@ -101,6 +116,7 @@ export default function App() {
     }
   }, []);
 
+  // Leitura em tempo real do Firestore
   useEffect(() => {
     const unsubscribeUsersCollection = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -125,35 +141,9 @@ export default function App() {
     return () => unsubscribeUsersCollection();
   }, [candidaturas.length]);
 
+  // Redirecionamento direto para autorização do Discord
   const handleDiscordLogin = () => {
-    window.location.href = DISCORD_AUTH_URL;
-  };
-
-  // Botão de acesso alternativo rápido caso o Discord dê bloqueio de API por restrições de região/app
-  const handleAlternativeLogin = async () => {
-    const name = prompt("Insere o teu nome/tag do Discord para entrar no painel:");
-    if (!name) return;
-    const profile = {
-      id: Math.floor(100000 + Math.random() * 900000).toString(),
-      username: name,
-      avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
-      discordTag: `@${name.toLowerCase()}`
-    };
-    setUser(profile);
-    localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
-    
-    const userRef = doc(db, 'users', profile.id);
-    await setDoc(userRef, {
-      discordId: profile.id,
-      username: profile.username,
-      discordTag: profile.discordTag,
-      avatar: profile.avatar,
-      idInGame: Math.floor(2000 + Math.random() * 25000),
-      age: '18 anos',
-      estado: 'aprovado',
-      roles: ['01 Member´s'],
-      lastLogin: new Date().toISOString()
-    }, { merge: true });
+    window.location.href = getDiscordAuthUrl();
   };
 
   const handleLogout = () => {
@@ -171,6 +161,22 @@ export default function App() {
     alert('Candidatura rejeitada.');
   };
 
+  const handleForceSync = async () => {
+    if (!user) return;
+    setSyncLoading(true);
+    setSyncMessage('A comunicar com o Bot do Discord...');
+    try {
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, { lastSyncRequest: new Date().toISOString() });
+      setSyncMessage('✅ Cargos sincronizados com sucesso!');
+    } catch (error) {
+      setSyncMessage('❌ Erro de sincronização.');
+    } finally {
+      setSyncLoading(false);
+      setTimeout(() => setSyncMessage(''), 4000);
+    }
+  };
+
   const filteredMembers = usersList.filter(m => 
     (m.username && m.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (m.idInGame && m.idInGame.toString().includes(searchTerm)) ||
@@ -179,6 +185,8 @@ export default function App() {
 
   return (
     <div className={darkMode ? "min-h-screen bg-[#121418] text-gray-200 font-sans flex" : "min-h-screen bg-gray-100 text-gray-800 font-sans flex"}>
+      
+      {/* SIDEBAR */}
       <aside className={`w-64 border-r ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20`}>
         <div>
           <div className="p-6 flex items-center space-x-3 border-b border-neutral-800/50">
@@ -232,6 +240,7 @@ export default function App() {
         </div>
       </aside>
 
+      {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className={`h-16 border-b ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} px-8 flex justify-between items-center sticky top-0 z-30 shadow-sm`}>
           <div className="flex items-center gap-4">
@@ -253,14 +262,9 @@ export default function App() {
                 Sair
               </button>
             ) : (
-              <div className="flex gap-2">
-                <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition">
-                  Entrar com Discord
-                </button>
-                <button onClick={handleAlternativeLogin} className="bg-neutral-700 hover:bg-neutral-600 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-md transition" title="Acesso Direto Alternativo">
-                  ⚡ Direto
-                </button>
-              </div>
+              <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition">
+                Entrar com Discord
+              </button>
             )}
           </div>
         </header>
@@ -273,22 +277,14 @@ export default function App() {
               </div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
               <p className="text-neutral-400 text-xs leading-relaxed mb-6">
-                Para aceder à plataforma e sincronizar os teus cargos no Discord do Magnatas 01, efetua login.
+                Para aceder à plataforma e sincronizar os teus cargos no Discord do Magnatas 01, clica no botão abaixo para vincular a tua conta.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <button 
-                  onClick={handleDiscordLogin}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-6 py-3 rounded-2xl text-xs tracking-wider uppercase shadow-xl shadow-indigo-600/30 transition duration-200"
-                >
-                  VINCULAR DISCORD (OAUTH2)
-                </button>
-                <button 
-                  onClick={handleAlternativeLogin}
-                  className="bg-neutral-800 hover:bg-neutral-700 text-gray-300 font-extrabold px-6 py-3 rounded-2xl text-xs tracking-wider uppercase border border-neutral-700 transition duration-200"
-                >
-                  ⚡ Acesso Direto (Sem Erros)
-                </button>
-              </div>
+              <button 
+                onClick={handleDiscordLogin}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs tracking-wider uppercase shadow-xl shadow-indigo-600/30 transition duration-200"
+              >
+                VINCULAR DISCORD (OAUTH2)
+              </button>
             </div>
           ) : (
             <>
@@ -372,6 +368,18 @@ export default function App() {
                       <h2 className="text-xl font-bold text-white">{user.username}</h2>
                       <p className="text-xs text-neutral-400">{user.discordTag}</p>
                     </div>
+                  </div>
+                  <div className="pt-6 border-t border-neutral-800">
+                    <button 
+                      onClick={handleForceSync}
+                      disabled={syncLoading}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg shadow-red-600/20 transition"
+                    >
+                      {syncLoading ? 'A processar...' : '🔄 Forçar Sincronização de Cargos'}
+                    </button>
+                    {syncMessage && (
+                      <p className="text-xs text-center mt-3 text-emerald-400 font-bold">{syncMessage}</p>
+                    )}
                   </div>
                 </div>
               )}
