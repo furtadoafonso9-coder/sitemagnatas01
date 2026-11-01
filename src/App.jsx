@@ -31,24 +31,23 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // ==========================================
-// CONFIGURAÇÃO OAUTH2 DISCORD (FINAL)
+// CONFIGURAÇÃO OAUTH2 DISCORD (URL EXATA)
 // ==========================================
 const DISCORD_CLIENT_ID = "1544523627846025296"; 
-const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
+const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app/";
+
+// URL limpa gerada estritamente com o redirect exato configurado no portal
 const DISCORD_AUTH_URL = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [currentView, setCurrentView] = useState('gestao');
-  const [subView, setSubView] = useState('membros'); // 'membros' ou 'candidaturas'
+  const [subView, setSubView] = useState('membros'); 
   const [darkMode, setDarkMode] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [usersList, setUsersList] = useState([]);
   const [stats, setStats] = useState({ ativos: 12, pendentes: 0, warnings: 0, staff: 1 });
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
 
-  // Estados para Candidaturas e Funcionalidades
   const [candidaturas, setCandidaturas] = useState([
     { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' },
     { id: '2', nome: 'reys_fps', idInGame: '30492', idade: '17 anos', motivo: 'Recomendado pelo membro Ciganomano.', estado: 'pendente' }
@@ -66,42 +65,45 @@ export default function App() {
 
   // Captura do Token do Discord na URL após o Redirecionamento
   useEffect(() => {
-    const fragment = new URLSearchParams(window.location.hash.slice(1));
-    const accessToken = fragment.get('access_token');
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      const fragment = new URLSearchParams(hash.slice(1));
+      const accessToken = fragment.get('access_token');
 
-    if (accessToken) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      fetch('https://discord.com/api/users/@me', {
-        headers: { authorization: `Bearer ${accessToken}` }
-      })
-      .then(res => res.json())
-      .then(async (discordUser) => {
-        if (discordUser.id) {
-          const profile = {
-            id: discordUser.id,
-            username: discordUser.username,
-            avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png",
-            discordTag: `@${discordUser.username}`
-          };
-          setUser(profile);
-          localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
+      if (accessToken) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        fetch('https://discord.com/api/users/@me', {
+          headers: { authorization: `Bearer ${accessToken}` }
+        })
+        .then(res => res.json())
+        .then(async (discordUser) => {
+          if (discordUser.id) {
+            const profile = {
+              id: discordUser.id,
+              username: discordUser.username,
+              avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png",
+              discordTag: `@${discordUser.username}`
+            };
+            setUser(profile);
+            localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-          const userRef = doc(db, 'users', discordUser.id);
-          const initialData = {
-            discordId: discordUser.id,
-            username: discordUser.username,
-            discordTag: profile.discordTag,
-            avatar: profile.avatar,
-            idInGame: Math.floor(2000 + Math.random() * 25000),
-            age: '18 anos',
-            estado: 'aprovado',
-            roles: ['01 Member´s'],
-            lastLogin: new Date().toISOString()
-          };
-          await setDoc(userRef, initialData, { merge: true });
-        }
-      })
-      .catch(err => console.error("Erro ao obter perfil Discord:", err));
+            const userRef = doc(db, 'users', discordUser.id);
+            const initialData = {
+              discordId: discordUser.id,
+              username: discordUser.username,
+              discordTag: profile.discordTag,
+              avatar: profile.avatar,
+              idInGame: Math.floor(2000 + Math.random() * 25000),
+              age: '18 anos',
+              estado: 'aprovado',
+              roles: ['01 Member´s'],
+              lastLogin: new Date().toISOString()
+            };
+            await setDoc(userRef, initialData, { merge: true });
+          }
+        })
+        .catch(err => console.error("Erro ao obter perfil Discord:", err));
+      }
     } else {
       const saved = localStorage.getItem('magnatas_discord_user');
       if (saved) setUser(JSON.parse(saved));
@@ -113,7 +115,6 @@ export default function App() {
     const unsubscribeUsersCollection = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
       let ativosCount = 0;
-      let pendentesCount = candidaturas.length;
 
       snapshot.forEach((docSnap) => {
         const info = docSnap.data();
@@ -126,7 +127,7 @@ export default function App() {
         setStats(prev => ({ 
           ...prev, 
           ativos: ativosCount, 
-          pendentes: pendentesCount 
+          pendentes: candidaturas.length 
         }));
       }
     });
@@ -275,7 +276,6 @@ export default function App() {
             <>
               {currentView === 'gestao' && (
                 <>
-                  {/* ABAS: MEMBROS / CANDIDATURAS */}
                   <div className="flex gap-4 border-b border-neutral-800 pb-4">
                     <button 
                       onClick={() => setSubView('membros')}
@@ -296,7 +296,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* CARDS */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
                       <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center font-bold text-lg border border-emerald-500/20">👥</div>
@@ -331,7 +330,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* SUB-VISTA: MEMBROS */}
                   {subView === 'membros' && (
                     <>
                       <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[#181b20] p-4 rounded-2xl border border-neutral-800/80 shadow-lg">
@@ -409,7 +407,6 @@ export default function App() {
                     </>
                   )}
 
-                  {/* SUB-VISTA: CANDIDATURAS PENDENTES */}
                   {subView === 'candidaturas' && (
                     <div className="bg-[#181b20] border border-neutral-800/80 rounded-3xl p-8 space-y-6 shadow-2xl">
                       <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
@@ -461,7 +458,6 @@ export default function App() {
                 </>
               )}
 
-              {/* OUTRAS VISTAS DO SISTEMA */}
               {currentView === 'radios' && (
                 <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
                   <h2 className="text-xl font-bold text-white">📻 Frequências de Comunicação da Gang</h2>
