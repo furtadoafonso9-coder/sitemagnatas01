@@ -10,6 +10,9 @@ import {
   updateDoc 
 } from 'firebase/firestore';
 
+// ==========================================
+// CONFIGURAÇÃO EXCLUSIVA DO FIRESTORE
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCstl872xKUcdUwX5aQVFMkpo8v-R-9EoE",
   authDomain: "sitemagnatas01.firebaseapp.com",
@@ -23,6 +26,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// ==========================================
+// CONFIGURAÇÃO OAUTH2 DO DISCORD
+// ==========================================
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
 const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
@@ -31,15 +37,11 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userStatus, setUserStatus] = useState('pendente_candidatura'); 
   const [currentView, setCurrentView] = useState('gestao');
-  const [subView, setSubView] = useState('membros'); 
-  const [darkMode, setDarkMode] = useState(true);
   const [usersList, setUsersList] = useState([]);
   
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
-  const [candidaturas, setCandidaturas] = useState([
-    { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' }
-  ]);
 
+  // Captura limpa do token OAuth2 do Discord na URL
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -48,9 +50,10 @@ export default function App() {
       const fragment = new URLSearchParams(hash.slice(1));
       const accessToken = fragment.get('access_token');
 
+      // Limpa imediatamente a URL para evitar conflitos de parsing
+      window.history.replaceState({}, document.title, window.location.pathname);
+
       if (accessToken) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
         fetch('https://discord.com/api/users/@me', {
           headers: { authorization: `Bearer ${accessToken}` }
         })
@@ -69,12 +72,12 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
+            // Grava ou lê o estado do utilizador diretamente no Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
             if (docSnap.exists()) {
-              const data = docSnap.data();
-              setUserStatus(data.estado || 'pendente_candidatura');
+              setUserStatus(docSnap.data().estado || 'pendente_candidatura');
             } else {
               await setDoc(userRef, {
                 discordId: discordUser.id,
@@ -88,7 +91,7 @@ export default function App() {
             }
           }
         })
-        .catch(err => console.error("Erro ao obter perfil:", err));
+        .catch(err => console.error("Erro ao obter perfil do Discord:", err));
       }
     } else if (savedUser) {
       try {
@@ -105,6 +108,7 @@ export default function App() {
     }
   }, []);
 
+  // Leitura em tempo real dos membros na base de dados
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -124,6 +128,7 @@ export default function App() {
     localStorage.removeItem('magnatas_discord_user');
     setUser(null);
     setUserStatus('pendente_candidatura');
+    window.location.href = window.location.pathname;
   };
 
   const handleSubmitCandidatura = async (e) => {
@@ -142,7 +147,7 @@ export default function App() {
     });
 
     setUserStatus('pendente_analise');
-    alert('Candidatura submetida com sucesso! Aguarda aprovação da liderança.');
+    alert('Candidatura submetida com sucesso! Aguarda a aprovação da liderança.');
   };
 
   const handleAprovar = async (discordId) => {
@@ -153,9 +158,9 @@ export default function App() {
   const isApproved = user && userStatus === 'aprovado';
 
   return (
-    <div className={darkMode ? "min-h-screen bg-[#121418] text-gray-200 font-sans flex" : "min-h-screen bg-gray-100 text-gray-800 font-sans flex"}>
+    <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
       
-      {/* 🛡️ SIDEBAR: SÓ APARECE SE ESTIVER 100% AUTENTICADO E APROVADO */}
+      {/* Sidebar visível apenas para membros aprovados */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -164,19 +169,9 @@ export default function App() {
               <span className="text-lg font-black tracking-wider text-red-500">MAGNATAS 01!</span>
             </div>
             <nav className="p-4 space-y-1">
-              {[
-                { id: 'gestao', label: 'Base da Gang', icon: '📂' },
-                { id: 'membroslist', label: 'Lista de Membros', icon: '👥' }
-              ].map((menu) => (
-                <button
-                  key={menu.id}
-                  onClick={() => setCurrentView(menu.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === menu.id ? 'bg-red-600/10 text-red-500 border border-red-600/20' : 'text-gray-400 hover:bg-neutral-800/40 hover:text-gray-200'}`}
-                >
-                  <span>{menu.icon}</span>
-                  <span>{menu.label}</span>
-                </button>
-              ))}
+              <button onClick={() => setCurrentView('gestao')} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold bg-red-600/10 text-red-500 border border-red-600/20">
+                <span>📂</span> Base da Gang
+              </button>
             </nav>
           </div>
         </aside>
