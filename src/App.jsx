@@ -9,7 +9,8 @@ import {
   updateDoc, 
   query, 
   orderBy,
-  addDoc
+  addDoc,
+  deleteDoc
 } from 'firebase/firestore';
 
 const ALL_ROLES = [
@@ -34,7 +35,8 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userDoc, setUserDoc] = useState(null);
   const [currentView, setCurrentView] = useState('base');
-  const [subTab, setSubTab] = useState('membros');
+  const [subTabBase, setSubTabBase] = useState('ativos');
+  const [adminTab, setAdminTab] = useState('candidaturas');
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [emailInput, setEmailInput] = useState('');
@@ -42,15 +44,21 @@ export default function App() {
   const [usernameInput, setUsernameInput] = useState('');
 
   const [usersList, setUsersList] = useState([]);
+  const [roupas, setRoupas] = useState([]);
+  const [regras, setRegras] = useState([]);
+  const [radios, setRadios] = useState({ principal: { frequencia: '100.0', info: 'Rádio Principal' }, alternativa: { frequencia: '105.5', info: 'Rádio Secundária' } });
+  const [logsList, setLogsList] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('aprovado');
-  const [roleFilter, setRoleFilter] = useState('todos');
   const [activeRoleModalUser, setActiveRoleModalUser] = useState(null);
 
-  // Forms auxiliares
+  // Forms
   const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
-  const [formUpgrade, setFormUpgrade] = useState({ cargoDesejado: '', motivo: '' });
-  const [formAutorizacao, setFormAutorizacao] = useState({ tipo: 'Calças', motivo: '' });
+  const [formPerfil, setFormPerfil] = useState({ avatar: '', biografia: '' });
+  const [formRoupa, setFormRoupa] = useState({ nome: '', numero: '', imagem: '' });
+  const [formRegra, setFormRegra] = useState({ titulo: '', descricao: '', ordem: 1 });
+  const [formRadio, setFormRadio] = useState({ principalFreq: '', alternativaFreq: '' });
+  const [formPunicao, setFormPunicao] = useState({ targetUserId: '', tipo: 'Warning', tempo: '', motivo: '' });
+  const [formNota, setFormNota] = useState({ targetUserId: '', nota: '' });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('magnatas_email_user');
@@ -69,7 +77,11 @@ export default function App() {
     try {
       const userRef = doc(db, 'users', uid);
       const docSnap = await getDoc(userRef);
-      if (docSnap.exists()) setUserDoc(docSnap.data());
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setUserDoc(data);
+        setFormPerfil({ avatar: data.avatar || '', biografia: data.biografia || '' });
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -84,11 +96,42 @@ export default function App() {
       snap.forEach(d => list.push({ id: d.id, ...d.data() }));
       setUsersList(list);
     });
+    const unsubRoupas = onSnapshot(collection(db, 'roupas'), (snap) => {
+      let r = [];
+      snap.forEach(d => r.push({ id: d.id, ...d.data() }));
+      setRoupas(r);
+    });
+    const unsubRadios = onSnapshot(collection(db, 'config'), (snap) => {
+      snap.forEach(d => { if (d.id === 'radios') setRadios(d.data()); });
+    });
+    const qRegras = query(collection(db, 'regras'), orderBy('ordem', 'asc'));
+    const unsubRegras = onSnapshot(qRegras, (snap) => {
+      let reg = [];
+      snap.forEach(d => reg.push({ id: d.id, ...d.data() }));
+      setRegras(reg);
+    });
+    const qLogs = query(collection(db, 'logs'), orderBy('timestamp', 'desc'));
+    const unsubLogs = onSnapshot(qLogs, (snap) => {
+      let l = [];
+      snap.forEach(d => l.push({ id: d.id, ...d.data() }));
+      setLogsList(l);
+    });
 
     return () => {
-      unsubUser(); unsubUsers();
+      unsubUser(); unsubUsers(); unsubRoupas(); unsubRadios(); unsubRegras(); unsubLogs();
     };
   }, [user]);
+
+  const addLog = async (acao, detalhe) => {
+    try {
+      await addDoc(collection(db, 'logs'), {
+        autor: user.username,
+        acao,
+        detalhe,
+        timestamp: new Date().toLocaleString()
+      });
+    } catch(e) { console.error(e); }
+  };
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
@@ -107,15 +150,19 @@ export default function App() {
           email: emailInput.trim(),
           password: passwordInput,
           avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
+          biografia: "Sem biografia definida.",
           estado: 'pendente_candidatura',
           roles: ["01 Member´s", "HOMEM"],
-          destacado: false
+          destacado: false,
+          ausente: false,
+          punicoes: [],
+          notasInternas: []
         };
         await setDoc(userRef, newUser);
         setUser(newUser); setUserDoc(newUser);
         localStorage.setItem('magnatas_email_user', JSON.stringify(newUser));
       } else {
-        if (!docSnap.exists()) return alert("Conta não encontrada. Regista-te primeiro!");
+        if (!docSnap.exists()) return alert("Conta não encontrada!");
         const data = docSnap.data();
         if (data.password && data.password !== passwordInput) return alert("Palavra-passe incorreta!");
         setUser(data); setUserDoc(data);
@@ -131,18 +178,115 @@ export default function App() {
 
   const userRoles = userDoc?.roles || [];
   const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER");
-  const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader´s");
 
+  // Ações de Perfil
+  const handleSavePerfil = async (e) => {
+    e.preventDefault();
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, {
+      avatar: formPerfil.avatar || userDoc?.avatar,
+      biografia: formPerfil.biografia
+    });
+    alert("Perfil atualizado com sucesso!");
+  };
+
+  // Ações de Candidatura
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     const userRef = doc(db, 'users', user.uid);
     await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
-    alert("Candidatura submetida com sucesso!");
+    alert("Candidatura submetida!");
   };
 
-  const handleToggleDestaque = async (targetId, estadoAtual) => {
-    const userRef = doc(db, 'users', targetId);
-    await updateDoc(userRef, { destacado: !estadoAtual });
+  const handleAprovarCandidatura = async (targetUser) => {
+    await updateDoc(doc(db, 'users', targetUser.id), { estado: 'aprovado' });
+    await addLog("Aprovação", `Aprovou a candidatura de ${targetUser.username}`);
+  };
+
+  const handleReprovarCandidatura = async (targetUser) => {
+    await updateDoc(doc(db, 'users', targetUser.id), { estado: 'rejeitado' });
+    await addLog("Reprovação", `Reprovou a candidatura de ${targetUser.username}`);
+  };
+
+  // Ações do Owner (Editar Roupas, Rádio, Regras)
+  const handleAddRoupa = async (e) => {
+    e.preventDefault();
+    if (!isFounder) return alert("Apenas o Owner/Founder pode editar!");
+    await addDoc(collection(db, 'roupas'), formRoupa);
+    setFormRoupa({ nome: '', numero: '', imagem: '' });
+    await addLog("Roupas", `Adicionou kit ${formRoupa.nome}`);
+  };
+
+  const handleDeleteRoupa = async (id) => {
+    if (!isFounder) return;
+    await deleteDoc(doc(db, 'roupas', id));
+  };
+
+  const handleSaveRadios = async (e) => {
+    e.preventDefault();
+    if (!isFounder) return;
+    await setDoc(doc(db, 'config', 'radios'), {
+      principal: { frequencia: formRadio.principalFreq || radios.principal.frequencia, info: 'Rádio Principal' },
+      alternativa: { frequencia: formRadio.alternativaFreq || radios.alternativa.frequencia, info: 'Rádio Secundária' }
+    });
+    alert("Frequências atualizadas!");
+    await addLog("Rádio", "Atualizou as frequências oficiais");
+  };
+
+  const handleAddRegra = async (e) => {
+    e.preventDefault();
+    if (!isFounder) return;
+    await addDoc(collection(db, 'regras'), { ...formRegra, ordem: Number(formRegra.ordem) });
+    setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 1 });
+    await addLog("Regras", `Adicionou a regra: ${formRegra.titulo}`);
+  };
+
+  const handleDeleteRegra = async (id) => {
+    if (!isFounder) return;
+    await deleteDoc(doc(db, 'regras', id));
+  };
+
+  // Ações de Punição e Notas Internas
+  const handleAplicarPunicao = async (e) => {
+    e.preventDefault();
+    if (!formPunicao.targetUserId) return alert("Seleciona um membro!");
+    const target = usersList.find(u => u.id === formPunicao.targetUserId);
+    if (!target) return;
+
+    const novaPunicao = {
+      tipo: formPunicao.tipo,
+      tempo: formPunicao.tempo,
+      motivo: formPunicao.motivo,
+      aplicadoPor: user.username,
+      data: new Date().toLocaleDateString()
+    };
+
+    const punicoesAtuais = target.punicoes || [];
+    let novoEstado = target.estado;
+    if (formPunicao.tipo.includes("Ban")) novoEstado = "banido";
+
+    await updateDoc(doc(db, 'users', target.id), {
+      punicoes: [...punicoesAtuais, novaPunicao],
+      estado: novoEstado
+    });
+
+    alert("Punição aplicada!");
+    await addLog("Punição", `Aplicou ${formPunicao.tipo} a ${target.username}`);
+    setFormPunicao({ targetUserId: '', tipo: 'Warning', tempo: '', motivo: '' });
+  };
+
+  const handleAddNotaInterna = async (e) => {
+    e.preventDefault();
+    if (!formNota.targetUserId || !formNota.nota) return;
+    const target = usersList.find(u => u.id === formNota.targetUserId);
+    const notasAtuais = target?.notasInternas || [];
+
+    await updateDoc(doc(db, 'users', target.id), {
+      notasInternas: [...notasAtuais, { autor: user.username, texto: formNota.nota, data: new Date().toLocaleDateString() }]
+    });
+
+    alert("Nota interna guardada!");
+    setFormNota({ targetUserId: '', nota: '' });
   };
 
   const handleToggleRole = async (targetId, roleName) => {
@@ -151,34 +295,6 @@ export default function App() {
     let roles = target.roles || [];
     let updated = roles.includes(roleName) ? roles.filter(r => r !== roleName) : [...roles, roleName];
     await updateDoc(doc(db, 'users', targetId), { roles: updated });
-  };
-
-  const handlePedirUpgrade = async (e) => {
-    e.preventDefault();
-    await addDoc(collection(db, 'pedidosUpgrade'), {
-      uid: user.uid,
-      username: user.username,
-      nomeInGame: userDoc?.nomeInGame || user.username,
-      cargoDesejado: formUpgrade.cargoDesejado,
-      motivo: formUpgrade.motivo,
-      data: new Date().toLocaleDateString()
-    });
-    alert("Pedido de upgrade submetido com sucesso!");
-    setFormUpgrade({ cargoDesejado: '', motivo: '' });
-  };
-
-  const handlePedirAutorizacao = async (e) => {
-    e.preventDefault();
-    await addDoc(collection(db, 'autorizacoes'), {
-      uid: user.uid,
-      username: user.username,
-      tipo: formAutorizacao.tipo,
-      motivo: formAutorizacao.motivo,
-      status: 'pendente',
-      data: new Date().toLocaleDateString()
-    });
-    alert("Pedido de autorização enviado!");
-    setFormAutorizacao({ tipo: 'Calças', motivo: '' });
   };
 
   if (!user) {
@@ -236,18 +352,21 @@ export default function App() {
     );
   }
 
-  const filteredUsers = usersList.filter(m => {
-    const matchesSearch = (m.nomeInGame || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (m.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          String(m.idInGame || '').includes(searchQuery);
-    const matchesStatus = statusFilter === 'todos' || m.estado === statusFilter;
-    const matchesRole = roleFilter === 'todos' || (m.roles || []).includes(roleFilter);
-    return matchesSearch && matchesStatus && matchesRole;
+  // Filtros da Base da Gang
+  const membrosBase = usersList.filter(m => {
+    const matchesSearch = (m.nomeInGame || '').toLowerCase().includes(searchQuery.toLowerCase()) || (m.username || '').toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (subTabBase === 'ativos') return m.estado === 'aprovado' && !m.ausente;
+    if (subTabBase === 'destaque') return m.destacado;
+    if (subTabBase === 'ausentes') return m.ausente === true;
+    if (subTabBase === 'banidos') return m.estado === 'banido' || m.estado === 'rejeitado';
+    return true;
   });
 
   return (
     <div className="min-h-screen bg-[#0d0e12] text-gray-200 font-sans flex relative">
-      {/* SIDEBAR COM TODAS AS ABAS */}
+      {/* SIDEBAR */}
       <aside className="w-64 bg-[#121418] border-r border-neutral-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
         <div>
           <div className="p-5 border-b border-neutral-800/60 flex items-center gap-3">
@@ -255,42 +374,14 @@ export default function App() {
             <h2 className="text-lg font-black tracking-wider text-red-600">MAGNATAS 01!</h2>
           </div>
           <nav className="p-3 space-y-1 text-xs font-bold">
-            <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'base' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>👥</span> Base da Gang
-            </button>
-            <button onClick={() => setCurrentView('avisos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'avisos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>🔔</span> Avisos Gerais da Gang
-            </button>
-            <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>👕</span> Roupas & Kits
-            </button>
-            <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'radio' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>📡</span> Frequências Rádio
-            </button>
-            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'regras' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>📖</span> Regras Oficiais
-            </button>
-            <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>🎖️</span> Lista de Cargos
-            </button>
-            <button onClick={() => setCurrentView('upgrade')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'upgrade' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>⭐</span> Pedir Upgrade / Promoção
-            </button>
-            <button onClick={() => setCurrentView('autorizacoes')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'autorizacoes' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>🎽</span> Autorizações (Calças/Manga)
-            </button>
-            <button onClick={() => setCurrentView('meusavisos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'meusavisos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>⚠️</span> Meus Avisos / Punições
-            </button>
-            <button onClick={() => setCurrentView('discord')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'discord' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>💬</span> Discord da Gang
-            </button>
-            <button onClick={() => setCurrentView('perfil')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'perfil' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}>
-              <span>👤</span> Meu Perfil & Discord
-            </button>
+            <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'base' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👥</span> Base da Gang</button>
+            <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👕</span> Roupas & Kits</button>
+            <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'radio' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📡</span> Frequências Rádio</button>
+            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'regras' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📖</span> Regras Oficiais</button>
+            <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>🎖️</span> Lista de Cargos</button>
+            <button onClick={() => setCurrentView('perfil')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'perfil' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👤</span> Meu Perfil & Discord</button>
           </nav>
         </div>
-
         <div className="p-3">
           <button onClick={() => setCurrentView('admin')} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-black py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition">
             <span>⚙️</span> Painel Admin & Suporte
@@ -301,178 +392,52 @@ export default function App() {
       {/* ÁREA DE CONTEÚDO */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-neutral-800/80 bg-[#121418] px-8 flex justify-between items-center sticky top-0 z-30">
-          <h1 className="font-black text-sm uppercase tracking-wider text-red-600">MAGNATAS 01!</h1>
+          <h1 className="font-black text-sm uppercase tracking-wider text-red-600">MAGNATAS 01! &bull; {currentView.toUpperCase()}</h1>
           <div className="flex items-center gap-2">
-            <div className="flex flex-wrap gap-1.5 items-center">
-              {ALL_ROLES.slice(0, 8).map(role => (
-                <span key={role.name} className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase ${role.color}`}>
-                  {role.name}
-                </span>
-              ))}
-            </div>
-            <button onClick={handleLogout} className="ml-4 text-neutral-500 hover:text-red-500 text-sm font-bold">🚪</button>
+            <button onClick={handleLogout} title="Sair" className="text-neutral-500 hover:text-red-500 text-sm font-bold">🚪 Sair</button>
           </div>
         </header>
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
-          {/* BASE DA GANG: APENAS LISTAGEM DE MEMBROS E ESTRELINHA DE DESTAQUE */}
+
+          {/* 1. BASE DA GANG (Membros Ativos, Destaque, Ausentes, Banidos) */}
           {currentView === 'base' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setSubTab('membros')} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition ${subTab === 'membros' ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' : 'bg-[#121418] text-neutral-400 border border-neutral-800'}`}>
-                  <span>👥</span> Gestão Geral de Membros
-                </button>
+              <div className="flex items-center gap-2 border-b border-neutral-800 pb-4">
+                <button onClick={() => setSubTabBase('ativos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'ativos' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>👥 Ativos ({usersList.filter(u => u.estado === 'aprovado' && !u.ausente).length})</button>
+                <button onClick={() => setSubTabBase('destaque')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'destaque' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⭐ Em Destaque ({usersList.filter(u => u.destacado).length})</button>
+                <button onClick={() => setSubTabBase('ausentes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'ausentes' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>💤 Ausentes ({usersList.filter(u => u.ausente).length})</button>
+                <button onClick={() => setSubTabBase('banidos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'banidos' ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-neutral-900 text-neutral-400'}`}>🚫 Banidos ({usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado').length})</button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-[#121418] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4">
-                  <div className="w-12 h-12 bg-emerald-950/60 text-emerald-400 rounded-xl flex items-center justify-center text-xl">👥</div>
-                  <div>
-                    <p className="text-[10px] font-extrabold text-neutral-400 uppercase">Membros Ativos</p>
-                    <h3 className="text-2xl font-black text-white">{usersList.filter(u => u.estado === 'aprovado').length}</h3>
-                  </div>
-                </div>
-                <div className="bg-[#121418] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4">
-                  <div className="w-12 h-12 bg-amber-950/60 text-amber-400 rounded-xl flex items-center justify-center text-xl">⏳</div>
-                  <div>
-                    <p className="text-[10px] font-extrabold text-neutral-400 uppercase">Pendentes</p>
-                    <h3 className="text-2xl font-black text-white">{usersList.filter(u => u.estado === 'pendente_analise').length}</h3>
-                  </div>
-                </div>
-                <div className="bg-[#121418] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4">
-                  <div className="w-12 h-12 bg-red-950/60 text-red-400 rounded-xl flex items-center justify-center text-xl">❗</div>
-                  <div>
-                    <p className="text-[10px] font-extrabold text-neutral-400 uppercase">Warnings Ativos</p>
-                    <h3 className="text-2xl font-black text-white">0</h3>
-                  </div>
-                </div>
-                <div className="bg-[#121418] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4">
-                  <div className="w-12 h-12 bg-purple-950/60 text-purple-400 rounded-xl flex items-center justify-center text-xl">👑</div>
-                  <div>
-                    <p className="text-[10px] font-extrabold text-neutral-400 uppercase">Founders / Staff</p>
-                    <h3 className="text-2xl font-black text-white">{usersList.filter(u => (u.roles || []).some(r => r.includes('Founder') || r.includes('STAFF'))).length || 1}</h3>
-                  </div>
-                </div>
-              </div>
+              <input type="text" placeholder="Pesquisar membros..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#121418] border border-neutral-800 px-4 py-3 rounded-xl text-xs text-white" />
 
-              <div className="flex flex-col md:flex-row gap-3 items-center">
-                <input 
-                  type="text"
-                  placeholder="Pesquisar por Nome In-Game, ID, Motivo..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-[#121418] border border-neutral-800/80 px-4 py-3 rounded-xl text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-red-600"
-                />
-              </div>
-
-              <div className="bg-[#121418] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl">
+                <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-neutral-800 text-neutral-400 bg-neutral-900/30">
-                      <th className="p-4 w-10 text-center"><input type="checkbox" className="rounded border-neutral-800 bg-neutral-900" /></th>
                       <th className="p-4">Membro</th>
-                      <th className="p-4">ID / Idade</th>
-                      <th className="p-4">Discord</th>
+                      <th className="p-4">ID In-Game</th>
                       <th className="p-4">Estado</th>
-                      <th className="p-4">Cargos Atribuídos</th>
-                      <th className="p-4 text-right">Destaque</th>
+                      <th className="p-4">Cargos</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-800/60">
-                    {filteredUsers.map(m => (
+                    {membrosBase.map(m => (
                       <tr key={m.id} className="hover:bg-neutral-900/40">
-                        <td className="p-4 text-center"><input type="checkbox" className="rounded border-neutral-800 bg-neutral-900" /></td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-red-950 border border-red-700 flex items-center justify-center font-bold text-white text-xs">
-                              {(m.nomeInGame || m.username || 'M')[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <span className="font-black text-white uppercase text-xs flex items-center gap-1">
-                                {m.nomeInGame || m.username}
-                                {m.destacado && <span title="Membro Destacado">⭐</span>}
-                              </span>
-                              <span className="text-[10px] text-neutral-400">@{m.username}</span>
-                            </div>
+                        <td className="p-4 flex items-center gap-3">
+                          <img src={m.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-8 h-8 rounded-full border border-neutral-700" />
+                          <div>
+                            <span className="font-black text-white block">{m.nomeInGame || m.username} {m.destacado && '⭐'}</span>
+                            <span className="text-[10px] text-neutral-400">@{m.username}</span>
                           </div>
                         </td>
-                        <td className="p-4 text-neutral-300">ID: <strong className="text-white">{m.idInGame || 'N/A'}</strong> | {m.idade || '18'} anos</td>
-                        <td className="p-4 text-indigo-400 font-medium">@{m.username}</td>
-                        <td className="p-4">
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase bg-emerald-950 text-emerald-400 border border-emerald-700">
-                            {m.estado || 'aprovado'}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-wrap gap-1 max-w-xs">
-                            {(m.roles || ["01 Member´s"]).map(r => {
-                              const roleObj = ALL_ROLES.find(ar => ar.name === r);
-                              return (
-                                <span key={r} className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${roleObj ? roleObj.color : 'bg-emerald-950 border-emerald-600 text-emerald-400'}`}>
-                                  {r}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </td>
-                        <td className="p-4 text-right">
-                          <button 
-                            onClick={() => handleToggleDestaque(m.id, m.destacado)} 
-                            className={`p-2 rounded-lg border text-sm transition ${m.destacado ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-neutral-900 text-neutral-600 border-neutral-800 hover:text-amber-400'}`}
-                            title="Destacar Membro"
-                          >
-                            ⭐
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* PAINEL ADMIN: GESTÃO DE CARGOS E CANDIDATURAS PENDENTES */}
-          {currentView === 'admin' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-black text-amber-500">⚙️ Painel de Gestão & Controlo de Cargos</h2>
-
-              <div className="bg-[#121418] border border-neutral-800/80 rounded-2xl overflow-visible shadow-2xl">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-neutral-800 text-neutral-400 bg-neutral-900/30">
-                      <th className="p-4">Membro</th>
-                      <th className="p-4">Cargos Atuais</th>
-                      <th className="p-4 text-center">Atribuir / Remover Cargos</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-800/60">
-                    {usersList.map(m => (
-                      <tr key={m.id} className="hover:bg-neutral-900/40">
-                        <td className="p-4 font-bold text-white">{m.nomeInGame || m.username} (@{m.username})</td>
+                        <td className="p-4 text-white font-bold">ID: {m.idInGame || 'N/A'}</td>
+                        <td className="p-4"><span className="px-2.5 py-1 rounded text-[10px] uppercase font-bold bg-neutral-900 border border-neutral-700">{m.estado}</span></td>
                         <td className="p-4">
                           <div className="flex flex-wrap gap-1">
-                            {(m.roles || []).map(r => (
-                              <span key={r} className="px-2 py-0.5 rounded bg-neutral-900 text-[10px] text-neutral-300 border border-neutral-800">{r}</span>
-                            ))}
+                            {(m.roles || []).map(r => <span key={r} className="px-2 py-0.5 rounded bg-neutral-900 text-[10px] text-neutral-300">{r}</span>)}
                           </div>
-                        </td>
-                        <td className="p-4 text-center relative">
-                          <button onClick={() => setActiveRoleModalUser(activeRoleModalUser === m.id ? null : m.id)} className="bg-amber-600/20 border border-amber-600/40 text-amber-300 px-3 py-1.5 rounded-lg text-[11px] font-bold hover:bg-amber-600/30">
-                            + Gerir Cargos (Discord 💬)
-                          </button>
-                          {activeRoleModalUser === m.id && (
-                            <div className="absolute right-10 top-12 w-60 bg-[#16191f] border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-left space-y-1.5 max-h-56 overflow-y-auto">
-                              {ALL_ROLES.map(r => {
-                                const has = (m.roles || []).includes(r.name);
-                                return (
-                                  <button key={r.name} onClick={() => handleToggleRole(m.id, r.name)} className={`w-full text-left px-2.5 py-1.5 rounded text-[10px] font-bold flex justify-between items-center ${has ? 'bg-red-600/20 text-red-400 border border-red-600/40' : 'text-neutral-400 hover:bg-neutral-800'}`}>
-                                    <span>{r.name}</span><span>{has ? '✓' : '+'}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
                         </td>
                       </tr>
                     ))}
@@ -482,71 +447,109 @@ export default function App() {
             </div>
           )}
 
-          {/* PEDIR UPGRADE / PROMOÇÃO */}
-          {currentView === 'upgrade' && (
-            <div className="max-w-xl mx-auto bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-6">
-              <h2 className="text-xl font-black text-white flex items-center gap-2">⭐ Pedir Upgrade / Promoção</h2>
-              <form onSubmit={handlePedirUpgrade} className="space-y-4">
-                <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">Cargo Pretendido</label>
-                  <select value={formUpgrade.cargoDesejado} onChange={e => setFormUpgrade({...formUpgrade, cargoDesejado: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required>
-                    <option value="">Seleciona o cargo...</option>
-                    {ALL_ROLES.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">Motivo do Pedido</label>
-                  <textarea value={formUpgrade.motivo} onChange={e => setFormUpgrade({...formUpgrade, motivo: e.target.value})} placeholder="Explica porque mereces a promoção..." className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28" required></textarea>
-                </div>
-                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Submeter Pedido</button>
-              </form>
-            </div>
-          )}
-
-          {/* AUTORIZAÇÕES (CALÇAS / MANGA) */}
-          {currentView === 'autorizacoes' && (
-            <div className="max-w-xl mx-auto bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-6">
-              <h2 className="text-xl font-black text-white flex items-center gap-2">🎽 Autorizações (Calças/Manga)</h2>
-              <form onSubmit={handlePedirAutorizacao} className="space-y-4">
-                <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">Tipo de Autorização</label>
-                  <select value={formAutorizacao.tipo} onChange={e => setFormAutorizacao({...formAutorizacao, tipo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
-                    <option value="Calças">Autorização P/ Calças</option>
-                    <option value="Manga">Autorização P/ Manga</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">Justificação</label>
-                  <textarea value={formAutorizacao.motivo} onChange={e => setFormAutorizacao({...formAutorizacao, motivo: e.target.value})} placeholder="Motivo do pedido..." className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-                </div>
-                <button type="submit" className="w-full bg-red-600 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Enviar Pedido</button>
-              </form>
-            </div>
-          )}
-
-          {/* MEUS AVISOS / PUNIÇÕES */}
-          {currentView === 'meusavisos' && (
-            <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4">
-              <h2 className="text-xl font-black text-white flex items-center gap-2">⚠️ Meus Avisos / Punições</h2>
-              <div className="p-4 bg-emerald-950/40 border border-emerald-900/60 rounded-xl text-emerald-400 text-xs font-bold">
-                ✓ Não tens avisos ou punições registadas na tua conta. Mantém o bom comportamento!
+          {/* 2. LISTA DE TODOS OS CARGOS DO SERVIDOR */}
+          {currentView === 'cargos' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Todos os Cargos do Servidor</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {ALL_ROLES.map(role => (
+                  <div key={role.name} className="bg-[#121418] border border-neutral-800 p-5 rounded-2xl flex justify-between items-center shadow-lg">
+                    <span className={`px-3 py-1 rounded-lg text-xs font-black border uppercase ${role.color}`}>{role.name}</span>
+                    <span className="text-xs bg-neutral-900 px-3 py-1 rounded-full text-neutral-400 font-bold">
+                      {usersList.filter(u => (u.roles || []).includes(role.name)).length} membros
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* DISCORD DA GANG */}
-          {currentView === 'discord' && (
-            <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4 text-center max-w-lg mx-auto">
-              <div className="w-16 h-16 bg-indigo-600/20 border border-indigo-500/40 text-indigo-400 rounded-2xl mx-auto flex items-center justify-center text-3xl">💬</div>
-              <h2 className="text-xl font-black text-white">Servidor Discord Oficial</h2>
-              <p className="text-xs text-neutral-400">Junta-te à nossa comunidade no Discord para estares a par de todos os anúncios e formações de ação.</p>
-              <button onClick={() => window.open('https://discord.gg', '_blank')} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Entrar no Discord</button>
+          {/* 3. ROUPAS (Com Edição Owner) */}
+          {currentView === 'roupas' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Roupas & Kits</h2>
+              {isFounder && (
+                <form onSubmit={handleAddRoupa} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Kit (Apenas Owner)</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <input type="text" placeholder="Nome" value={formRoupa.nome} onChange={e => setFormRoupa({...formRoupa, nome: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="text" placeholder="Número" value={formRoupa.numero} onChange={e => setFormRoupa({...formRoupa, numero: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="url" placeholder="Link Imagem" value={formRoupa.imagem} onChange={e => setFormRoupa({...formRoupa, imagem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                  </div>
+                  <button type="submit" className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs uppercase">Guardar Kit</button>
+                </form>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {roupas.map(item => (
+                  <div key={item.id} className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-hidden shadow-xl space-y-3">
+                    <img src={item.imagem} className="w-full h-48 object-cover" />
+                    <div className="p-4 flex justify-between items-center">
+                      <h4 className="font-bold text-white text-xs">{item.nome} — #{item.numero}</h4>
+                      {isFounder && <button onClick={() => handleDeleteRoupa(item.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1 rounded-lg">Remover</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* MEU PERFIL & DISCORD */}
+          {/* 4. RÁDIO (Com Edição Owner) */}
+          {currentView === 'radio' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Frequências de Rádio</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-2">
+                  <h3 className="text-sm font-black text-red-500 uppercase">Rádio Principal: {radios.principal?.frequencia} MHz</h3>
+                  <p className="text-xs text-neutral-400">Usada para formações e patrulhas ativas.</p>
+                </div>
+                <div className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-2">
+                  <h3 className="text-sm font-black text-amber-500 uppercase">Rádio Secundária: {radios.alternativa?.frequencia} MHz</h3>
+                  <p className="text-xs text-neutral-400">Usada para comunicações de reserva.</p>
+                </div>
+              </div>
+              {isFounder && (
+                <form onSubmit={handleSaveRadios} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4 max-w-md">
+                  <h3 className="text-xs font-black text-amber-400 uppercase">Editar Frequências (Apenas Owner)</h3>
+                  <input type="text" placeholder="Nova Freq. Principal (ex: 100.0)" onChange={e => setFormRadio({...formRadio, principalFreq: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+                  <input type="text" placeholder="Nova Freq. Secundária (ex: 105.5)" onChange={e => setFormRadio({...formRadio, alternativaFreq: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+                  <button type="submit" className="w-full bg-amber-600 text-white font-bold py-3 rounded-xl text-xs uppercase">Atualizar Rádios</button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* 5. REGRAS (Com Edição Owner) */}
+          {currentView === 'regras' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Regras Oficiais</h2>
+              {isFounder && (
+                <form onSubmit={handleAddRegra} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h3 className="text-xs font-black text-red-500 uppercase">Nova Regra (Apenas Owner)</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="text" placeholder="Título da Regra" value={formRegra.titulo} onChange={e => setFormRegra({...formRegra, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="number" placeholder="Ordem" value={formRegra.ordem} onChange={e => setFormRegra({...formRegra, ordem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                  </div>
+                  <textarea placeholder="Descrição da Regra..." value={formRegra.descricao} onChange={e => setFormRegra({...formRegra, descricao: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-20" required></textarea>
+                  <button type="submit" className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs uppercase">Publicar Regra</button>
+                </form>
+              )}
+              <div className="space-y-4">
+                {regras.map((r, i) => (
+                  <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start">
+                    <div>
+                      <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
+                      <p className="text-xs text-neutral-400 mt-1">{r.descricao}</p>
+                    </div>
+                    {isFounder && <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1 rounded">Remover</button>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 6. MEU PERFIL & DISCORD (Foto + Biografia) */}
           {currentView === 'perfil' && (
-            <div className="max-w-lg mx-auto bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-6">
+            <div className="max-w-xl mx-auto bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-6">
               <div className="flex items-center gap-4 border-b border-neutral-800 pb-6">
                 <img src={userDoc?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-16 h-16 rounded-full border-2 border-red-600" />
                 <div>
@@ -555,25 +558,160 @@ export default function App() {
                   <p className="text-[10px] text-red-500 font-bold mt-1">{user.email}</p>
                 </div>
               </div>
-              <div className="space-y-3 text-xs">
-                <div className="flex justify-between p-3 bg-neutral-900 rounded-xl">
-                  <span className="text-neutral-400">ID In-Game:</span>
-                  <strong className="text-white">{userDoc?.idInGame || 'N/A'}</strong>
+
+              <form onSubmit={handleSavePerfil} className="space-y-4">
+                <div>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1">URL do Avatar (Foto)</label>
+                  <input type="url" placeholder="https://..." value={formPerfil.avatar} onChange={e => setFormPerfil({...formPerfil, avatar: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
                 </div>
-                <div className="flex justify-between p-3 bg-neutral-900 rounded-xl">
-                  <span className="text-neutral-400">Estado da Candidatura:</span>
-                  <strong className="text-emerald-400 uppercase">{userDoc?.estado || 'aprovado'}</strong>
+                <div>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1">Biografia</label>
+                  <textarea placeholder="Escreve algo sobre ti..." value={formPerfil.biografia} onChange={e => setFormPerfil({...formPerfil, biografia: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24"></textarea>
                 </div>
-              </div>
+                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Guardar Perfil</button>
+              </form>
             </div>
           )}
 
-          {currentView === 'avisos' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Avisos Gerais da Gang ativos.</div>}
-          {currentView === 'roupas' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Catálogo de Roupas & Kits ativo.</div>}
-          {currentView === 'radio' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Frequências de Rádio ativas.</div>}
-          {currentView === 'regras' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Regras Oficiais ativas.</div>}
-          {currentView === 'cargos' && <div className="text-white text-sm bg-[#121418] p-6 rounded-2xl border border-neutral-800">Lista de Cargos ativa.</div>}
+          {/* 7. PAINEL ADMIN COMPLETO (Candidaturas, Punições, Notas Internas, Logs) */}
+          {currentView === 'admin' && (
+            <div className="space-y-6">
+              <div className="flex gap-2 border-b border-neutral-800 pb-4">
+                <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⏳ Candidaturas Pendentes</button>
+                <button onClick={() => setAdminTab('cargos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'cargos' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>🎖️ Gestão de Cargos</button>
+                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Aplicar Punição</button>
+                <button onClick={() => setAdminTab('notas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'notas' ? 'bg-blue-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📝 Notas Internas</button>
+                <button onClick={() => setAdminTab('logs')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'logs' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📜 Logs do Sistema</button>
+              </div>
 
+              {/* Sub-painel: Candidaturas Pendentes */}
+              {adminTab === 'candidaturas' && (
+                <div className="space-y-4">
+                  {usersList.filter(u => u.estado === 'pendente_analise').length === 0 ? (
+                    <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl text-center text-neutral-500 text-xs">Sem candidaturas pendentes.</div>
+                  ) : (
+                    usersList.filter(u => u.estado === 'pendente_analise').map(cand => (
+                      <div key={cand.id} className="bg-[#121418] border border-amber-500/30 p-6 rounded-2xl flex justify-between items-center">
+                        <div>
+                          <h4 className="font-black text-white text-sm">{cand.username} (In-Game: {cand.nomeInGame || 'N/A'})</h4>
+                          <p className="text-xs text-neutral-400 mt-1">ID: {cand.idInGame} | Idade: {cand.idade} | Motivo: {cand.motivo}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleAprovarCandidatura(cand)} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Aprovar</button>
+                          <button onClick={() => handleReprovarCandidatura(cand)} className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Reprovar</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* Sub-painel: Gestão de Cargos */}
+              {adminTab === 'cargos' && (
+                <div className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-visible shadow-2xl">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-neutral-800 text-neutral-400 bg-neutral-900/30">
+                        <th className="p-4">Membro</th>
+                        <th className="p-4">Cargos Atuais</th>
+                        <th className="p-4 text-center">Atribuir / Remover Cargos</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {usersList.map(m => (
+                        <tr key={m.id} className="hover:bg-neutral-900/40">
+                          <td className="p-4 font-bold text-white">{m.nomeInGame || m.username} (@{m.username})</td>
+                          <td className="p-4">
+                            <div className="flex flex-wrap gap-1">
+                              {(m.roles || []).map(r => <span key={r} className="px-2 py-0.5 rounded bg-neutral-900 text-[10px] text-neutral-300">{r}</span>)}
+                            </div>
+                          </td>
+                          <td className="p-4 text-center relative">
+                            <button onClick={() => setActiveRoleModalUser(activeRoleModalUser === m.id ? null : m.id)} className="bg-amber-600/20 border border-amber-600/40 text-amber-300 px-3 py-1.5 rounded-lg text-[11px] font-bold">
+                              + Gerir Cargos
+                            </button>
+                            {activeRoleModalUser === m.id && (
+                              <div className="absolute right-10 top-12 w-60 bg-[#16191f] border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-left space-y-1.5 max-h-56 overflow-y-auto">
+                                {ALL_ROLES.map(r => {
+                                  const has = (m.roles || []).includes(r.name);
+                                  return (
+                                    <button key={r.name} onClick={() => handleToggleRole(m.id, r.name)} className={`w-full text-left px-2.5 py-1.5 rounded text-[10px] font-bold flex justify-between ${has ? 'bg-red-600/20 text-red-400' : 'text-neutral-400 hover:bg-neutral-800'}`}>
+                                      <span>{r.name}</span><span>{has ? '✓' : '+'}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Sub-painel: Punições */}
+              {adminTab === 'punicoes' && (
+                <form onSubmit={handleAplicarPunicao} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl max-w-lg space-y-4">
+                  <h3 className="text-sm font-black text-red-500 uppercase">Aplicar Punição a Membro</h3>
+                  <select value={formPunicao.targetUserId} onChange={e => setFormPunicao({...formPunicao, targetUserId: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required>
+                    <option value="">Seleciona o membro...</option>
+                    {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username} (@{u.username})</option>)}
+                  </select>
+                  <select value={formPunicao.tipo} onChange={e => setFormPunicao({...formPunicao, tipo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
+                    <option value="Warning">Warning 1</option>
+                    <option value="Warning 2">Warning 2</option>
+                    <option value="Muted">Mute Temporário</option>
+                    <option value="Ban Temporário">Ban Temporário</option>
+                    <option value="Ban Perma">Ban Permanente</option>
+                  </select>
+                  <input type="text" placeholder="Duração (ex: 3 dias / Permanente)" value={formPunicao.tempo} onChange={e => setFormPunicao({...formPunicao, tempo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                  <textarea placeholder="Motivo da punição..." value={formPunicao.motivo} onChange={e => setFormPunicao({...formPunicao, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
+                  <button type="submit" className="w-full bg-red-600 text-white font-bold py-3.5 rounded-xl text-xs uppercase">Aplicar Punição</button>
+                </form>
+              )}
+
+              {/* Sub-painel: Notas Internas */}
+              {adminTab === 'notas' && (
+                <div className="space-y-6">
+                  <form onSubmit={handleAddNotaInterna} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl max-w-lg space-y-4">
+                    <h3 className="text-sm font-black text-blue-400 uppercase">Adicionar Nota Interna (Privada)</h3>
+                    <select value={formNota.targetUserId} onChange={e => setFormNota({...formNota, targetUserId: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required>
+                      <option value="">Seleciona o membro...</option>
+                      {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username}</option>)}
+                    </select>
+                    <textarea placeholder="Nota confidencial da Staff..." value={formNota.nota} onChange={e => setFormNota({...formNota, nota: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
+                    <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-xs uppercase">Guardar Nota</button>
+                  </form>
+
+                  <div className="space-y-3">
+                    {usersList.filter(u => u.notasInternas?.length > 0).map(u => (
+                      <div key={u.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-2">
+                        <h4 className="font-bold text-white text-xs">Membro: {u.nomeInGame || u.username}</h4>
+                        {u.notasInternas.map((n, idx) => (
+                          <div key={idx} className="bg-neutral-900 p-3 rounded-xl text-xs text-neutral-300">
+                            <span className="text-blue-400 font-bold">{n.autor}:</span> {n.texto} <span className="text-[10px] text-neutral-500">({n.data})</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-painel: Logs do Sistema */}
+              {adminTab === 'logs' && (
+                <div className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-3 max-h-96 overflow-y-auto">
+                  {logsList.map(l => (
+                    <div key={l.id} className="text-xs p-3 bg-neutral-900/60 rounded-xl flex justify-between border border-neutral-800">
+                      <div><strong className="text-red-400">[{l.acao}]</strong> <span className="text-white font-bold">{l.autor}:</span> <span className="text-neutral-300">{l.detalhe}</span></div>
+                      <span className="text-[10px] text-neutral-500">{l.timestamp}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>
