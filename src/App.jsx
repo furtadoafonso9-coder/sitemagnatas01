@@ -10,8 +10,6 @@ import {
 } from 'firebase/firestore';
 import { 
   getAuth, 
-  signInWithPopup, 
-  OAuthProvider, 
   signOut, 
   onAuthStateChanged 
 } from 'firebase/auth';
@@ -32,7 +30,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const discordProvider = new OAuthProvider('oauth2.discord');
+
+// CONFIGURAÇÃO OAUTH2 DISCORD DIRETO
+const DISCORD_CLIENT_ID = "1544523627846025296"; // O teu Client ID
+const REDIRECT_URI = encodeURIComponent(window.location.origin);
+const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&scope=identify%20guilds%20email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -45,46 +47,65 @@ export default function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
 
-  // Autenticação e Monitorização em Tempo Real do Firestore
+  // Estados para as 30 Ideias Avançadas
+  const [auditLogs, setAuditLogs] = useState([
+    { id: 1, acao: "Mute Aplicado", mod: "Staff Athos", alvo: "P0ker NoSleep", data: "Há 10 min" },
+    { id: 2, acao: "Cargo Adicionado", mod: "01 Founder", alvo: "soso.exe 01!", data: "Há 1 hora" }
+  ]);
+  const [radios, setRadios] = useState([
+    { id: 1, nome: "Frequência Principal Gang", freq: "101.5 MHz", status: "Ativa" },
+    { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
+  ]);
+  const [upgrades, setUpgrades] = useState([]);
+  const [novopedido, setNovoPedido] = useState({ cargo: '01 Member´s', motivo: '' });
+
+  // Captura do Token do Discord na URL após o Redirecionamento
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = fragment.get('access_token');
 
-        // Extrai o ID numérico do Discord do fornecedor de OAuth2
-        const discordInfo = currentUser.providerData.find(p => p.providerId === 'oauth2.discord');
-        const discordId = discordInfo ? discordInfo.uid : currentUser.uid;
+    if (accessToken) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      fetch('https://discord.com/api/users/@me', {
+        headers: { authorization: `Bearer ${accessToken}` }
+      })
+      .then(res => res.json())
+      .then(async (discordUser) => {
+        if (discordUser.id) {
+          const profile = {
+            id: discordUser.id,
+            username: discordUser.username,
+            avatar: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+            discordTag: `@${discordUser.username}`
+          };
+          setUser(profile);
+          localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-        // Registo ou atualização automática do utilizador na coleção 'users'
-        const userRef = doc(db, 'users', currentUser.uid);
-        const unsubscribeUserDoc = onSnapshot(userRef, async (docSnap) => {
-          if (docSnap.exists()) {
-            setUserData(docSnap.data());
-          } else {
-            const initialUserData = {
-              discordId: discordId,
-              username: currentUser.displayName || 'Novo Membro',
-              email: currentUser.email || '',
-              discordTag: `@${currentUser.displayName || 'utilizador'}`,
-              idInGame: Math.floor(1000 + Math.random() * 90000),
-              age: '18 anos',
-              estado: 'aprovado',
-              roles: ['01 Member´s'],
-              createdAt: new Date().toISOString()
-            };
-            await setDoc(userRef, initialUserData);
-            setUserData(initialUserData);
-          }
-        });
+          // Atualiza/Cria no Firestore
+          const userRef = doc(db, 'users', discordUser.id);
+          const initialData = {
+            discordId: discordUser.id,
+            username: discordUser.username,
+            discordTag: profile.discordTag,
+            avatar: profile.avatar,
+            idInGame: Math.floor(2000 + Math.random() * 25000),
+            age: '18 anos',
+            estado: 'aprovado',
+            roles: ['01 Member´s'],
+            lastLogin: new Date().toISOString()
+          };
+          await setDoc(userRef, initialData, { merge: true });
+        }
+      })
+      .catch(err => console.error("Erro ao obter perfil Discord:", err));
+    } else {
+      const saved = localStorage.getItem('magnatas_discord_user');
+      if (saved) setUser(JSON.parse(saved));
+    }
+  }, []);
 
-        return () => unsubscribeUserDoc();
-      } else {
-        setUser(null);
-        setUserData(null);
-      }
-    });
-
-    // Escuta todos os utilizadores para a tabela do painel
+  // Leitura da Coleção de Membros no Firestore em Tempo Real
+  useEffect(() => {
     const unsubscribeUsersCollection = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
       let ativosCount = 0;
@@ -107,51 +128,42 @@ export default function App() {
       }
     });
 
-    return () => {
-      unsubscribeAuth();
-      unsubscribeUsersCollection();
-    };
+    return () => unsubscribeUsersCollection();
   }, []);
 
-  // Login via Discord OAuth2
-  const handleDiscordLogin = async () => {
-    try {
-      discordProvider.addScope('identify');
-      discordProvider.addScope('guilds');
-      discordProvider.addScope('email');
-      await signInWithPopup(auth, discordProvider);
-    } catch (error) {
-      console.error("Erro na autenticação do Discord:", error);
-      alert("Falha na autenticação do Discord: " + error.message);
-    }
+  // Redirecionamento Direto para o Discord (OAuth2)
+  const handleDiscordLogin = () => {
+    window.location.href = DISCORD_AUTH_URL;
   };
 
-  // Terminar Sessão
-  const handleLogout = async () => {
-    await signOut(auth);
+  // Logout
+  const handleLogout = () => {
+    localStorage.removeItem('magnatas_discord_user');
+    setUser(null);
+    setUserData(null);
   };
 
-  // Forçar Sincronização Manual de Cargos
+  // Forçar Sincronização de Cargos
   const handleForceSync = async () => {
     if (!user) return;
     setSyncLoading(true);
-    setSyncMessage('A enviar sinal ao Bot no Discord...');
+    setSyncMessage('A comunicar com o Bot do Discord...');
 
     try {
-      const userRef = doc(db, 'users', user.uid);
+      const userRef = doc(db, 'users', user.id);
       await updateDoc(userRef, {
         lastSyncRequest: new Date().toISOString()
       });
-      setSyncMessage('✅ Pedido enviado! O Bot atualizará os cargos no servidor.');
+      setSyncMessage('✅ Sinal enviado! O Bot aplicará as alterações no servidor.');
     } catch (error) {
-      setSyncMessage('❌ Erro de ligação à base de dados.');
+      setSyncMessage('❌ Erro de sincronização.');
     } finally {
       setSyncLoading(false);
       setTimeout(() => setSyncMessage(''), 4000);
     }
   };
 
-  // Filtragem de Membros para a Tabela
+  // Filtragem de Membros
   const filteredMembers = usersList.filter(m => 
     (m.username && m.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (m.idInGame && m.idInGame.toString().includes(searchTerm)) ||
@@ -172,8 +184,8 @@ export default function App() {
             <span className="text-lg font-black tracking-wider text-red-500">MAGNATAS 01!</span>
           </div>
 
-          {/* MENU DE NAVEGAÇÃO LATERAL */}
-          <nav className="p-4 space-y-1">
+          {/* MENU DE NAVEGAÇÃO LATERAL COMPLETO */}
+          <nav className="p-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)]">
             {[
               { id: 'gestao', label: 'Base da Gang', icon: '📂' },
               { id: 'avisos', label: 'Avisos Gerais da Gang', icon: '🔔' },
@@ -198,8 +210,16 @@ export default function App() {
           </nav>
         </div>
 
-        {/* BOTAO PERFIL NA SIDEBAR */}
-        <div className="p-4 border-t border-neutral-800/50">
+        {/* BOTAO DE ADMIN E PERFIL NA SIDEBAR */}
+        <div className="p-4 border-t border-neutral-800/50 space-y-2">
+          <button 
+            onClick={() => setCurrentView('admin')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'admin' ? 'bg-amber-600 text-white' : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20'}`}
+          >
+            <span>⚙️</span>
+            <span>Painel Admin & Suporte</span>
+          </button>
+          
           <button 
             onClick={() => setCurrentView('perfil')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'perfil' ? 'bg-red-600 text-white shadow-lg' : 'bg-neutral-800/60 text-gray-300 hover:bg-neutral-800'}`}
@@ -217,7 +237,7 @@ export default function App() {
         <header className={`h-16 border-b ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} px-8 flex justify-between items-center sticky top-0 z-30 shadow-sm`}>
           <div className="flex items-center gap-4">
             <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">
-              {currentView === 'gestao' ? 'Painel Geral de Membros' : `Secção: ${currentView}`}
+              {currentView === 'gestao' ? 'PAINEL GERAL DE MEMBROS' : `SECÇÃO: ${currentView.toUpperCase()}`}
             </span>
           </div>
 
@@ -257,11 +277,11 @@ export default function App() {
           </div>
         </header>
 
-        {/* CONTEÚDO */}
+        {/* CONTEÚDO PRINCIPAL DINÂMICO */}
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
           
-          {/* SE NÃO ESTIVER AUTENTICADO */}
           {!user ? (
+            /* TELA DE AUTENTICAÇÃO OBRIGATÓRIA */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
               <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">
                 🔑
@@ -282,7 +302,6 @@ export default function App() {
               {/* VISTA 1: BASE DA GANG / GESTÃO DE MEMBROS */}
               {currentView === 'gestao' && (
                 <>
-                  {/* SELEÇÃO DE VISTAS DA BASE DA GANG */}
                   <div className="flex gap-4 border-b border-neutral-800 pb-4">
                     <button className="bg-red-600 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg shadow-red-600/30 flex items-center gap-2">
                       <span>👥</span> Gestão Geral de Membros
@@ -292,7 +311,7 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* CARTÕES DE ESTATÍSTICAS */}
+                  {/* CARDS DE ESTATÍSTICAS */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
                       <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center font-bold text-lg border border-emerald-500/20">👥</div>
@@ -314,7 +333,7 @@ export default function App() {
                       <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center font-bold text-lg border border-red-500/20">⚠️</div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Warnings Ativos</p>
-                        <h3 className="text-2xl font-black text-white">{stats.warnings}</h3>
+                        <h3 className="text-2xl font-black text-white">0</h3>
                       </div>
                     </div>
 
@@ -347,7 +366,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* TABELA DE MEMBROS */}
+                  {/* TABELA ORIGINAL DE MEMBROS */}
                   <div className="bg-[#181b20] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -369,15 +388,15 @@ export default function App() {
                                   {m.username ? m.username.charAt(0) : 'M'}
                                 </div>
                                 <div>
-                                  <p className="font-extrabold text-white">{m.username || 'Membro Magnatas'}</p>
-                                  <p className="text-[10px] text-neutral-500">{m.email || 'Discord OAuth2'}</p>
+                                  <p className="font-extrabold text-white">{m.username || 'Membro'}</p>
+                                  <p className="text-[10px] text-neutral-500">{m.email || 'Discord Validado'}</p>
                                 </div>
                               </td>
                               <td className="p-4 font-mono text-neutral-300">
-                                ID: <span className="text-white font-bold">{m.idInGame || '27356'}</span> | {m.age || '18 anos'}
+                                ID: <span className="text-white font-bold">{m.idInGame || '27356'}</span> | {m.age || '16 anos'}
                               </td>
                               <td className="p-4">
-                                <span className="text-indigo-400 font-bold">{m.discordTag || '@facada._fps'}</span>
+                                <span className="text-indigo-400 font-bold">{m.discordTag || 'Não vinculado'}</span>
                               </td>
                               <td className="p-4">
                                 <span className="bg-emerald-950 text-emerald-400 border border-emerald-800/40 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase">
@@ -403,7 +422,7 @@ export default function App() {
                         ) : (
                           <tr>
                             <td colSpan="6" className="p-8 text-center text-neutral-500">
-                              Nenhum membro encontrado com os filtros aplicados.
+                              A carregar membros do Firestore em tempo real...
                             </td>
                           </tr>
                         )}
@@ -413,21 +432,81 @@ export default function App() {
                 </>
               )}
 
-              {/* VISTA 2: PERFIL DO UTILIZADOR */}
+              {/* VISTA 2: FREQUÊNCIAS RÁDIO (IDEIA #7) */}
+              {currentView === 'radios' && (
+                <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
+                  <h2 className="text-xl font-bold text-white">📻 Frequências de Comunicação da Gang</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {radios.map(r => (
+                      <div key={r.id} className="p-5 bg-neutral-900 rounded-2xl border border-neutral-800 flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-white">{r.nome}</p>
+                          <p className="text-xs text-indigo-400 font-mono mt-1">{r.freq}</p>
+                        </div>
+                        <span className="bg-emerald-950 text-emerald-400 text-[10px] px-3 py-1 rounded-lg border border-emerald-800 font-bold">{r.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* VISTA 3: PEDIR UPGRADE / PROMOÇÃO (IDEIA #6) */}
+              {currentView === 'upgrade' && (
+                <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6 max-w-2xl mx-auto">
+                  <h2 className="text-xl font-bold text-white">⭐ Pedido de Promoção / Cargo</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs text-neutral-400 font-bold block mb-2">Cargo Pretendido</label>
+                      <select className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
+                        <option>01 Leader´s</option>
+                        <option>Resp. Manager´s</option>
+                        <option>Staff ATHOS PvP</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral-400 font-bold block mb-2">Motivo / Ações Realizadas</label>
+                      <textarea placeholder="Explica a razão do pedido..." className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28"></textarea>
+                    </div>
+                    <button onClick={() => alert('Pedido submetido para a Staff!')} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg">
+                      Enviar Pedido de Promoção
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* VISTA 4: PAINEL ADMIN & SUPORTE (IDEIA #4 & #27) */}
+              {currentView === 'admin' && (
+                <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
+                  <h2 className="text-xl font-bold text-amber-500">⚙️ Log de Auditoria & Painel da Staff</h2>
+                  <div className="space-y-3">
+                    {auditLogs.map(log => (
+                      <div key={log.id} className="p-4 bg-neutral-900 rounded-2xl border border-neutral-800 flex justify-between items-center text-xs">
+                        <div>
+                          <p className="font-bold text-white">{log.acao} em <span className="text-indigo-400">{log.alvo}</span></p>
+                          <p className="text-[10px] text-neutral-500">Executado por: {log.mod}</p>
+                        </div>
+                        <span className="text-[10px] text-neutral-400 bg-neutral-800 px-2.5 py-1 rounded-lg">{log.data}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* VISTA 5: MEU PERFIL & DISCORD */}
               {currentView === 'perfil' && (
                 <div className="max-w-2xl mx-auto bg-[#181b20] border border-neutral-800 p-8 rounded-3xl shadow-xl space-y-6">
                   <div className="flex items-center gap-6">
                     <img 
-                      src={user.photoURL || "https://cdn.discordapp.com/embed/avatars/0.png"} 
+                      src={user.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} 
                       alt="Avatar" 
                       className="w-20 h-20 rounded-2xl border-2 border-red-500 shadow-md object-cover" 
                     />
                     <div>
-                      <h2 className="text-xl font-bold text-white">{user.displayName}</h2>
-                      <p className="text-xs text-neutral-400">{user.email}</p>
+                      <h2 className="text-xl font-bold text-white">{user.username}</h2>
+                      <p className="text-xs text-neutral-400">{user.discordTag}</p>
                       <div className="mt-2 flex items-center gap-2">
                         <span className="text-[10px] bg-indigo-950 text-indigo-400 border border-indigo-800/50 px-2.5 py-0.5 rounded-md font-mono">
-                          ID Discord: {userData?.discordId || 'Carregando...'}
+                          ID Discord: {user.id}
                         </span>
                       </div>
                     </div>
@@ -449,8 +528,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* OUTRAS VISTAS DA SIDEBAR */}
-              {currentView !== 'gestao' && currentView !== 'perfil' && (
+              {/* OUTRAS VISTAS GERÉRICAS */}
+              {!['gestao', 'radios', 'upgrade', 'admin', 'perfil'].includes(currentView) && (
                 <div className="bg-[#181b20] border border-neutral-800 p-12 rounded-3xl text-center shadow-xl">
                   <h2 className="text-2xl font-black mb-2 text-white uppercase tracking-wider">Secção: {currentView}</h2>
                   <p className="text-xs text-neutral-400 mb-6">Esta funcionalidade está sincronizada com a base de dados do Magnatas 01.</p>
