@@ -7,8 +7,6 @@ import {
   setDoc, 
   getDoc, 
   updateDoc, 
-  addDoc, 
-  deleteDoc, 
   query, 
   orderBy 
 } from 'firebase/firestore';
@@ -39,8 +37,6 @@ export default function App() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
-  const [formRoupa, setFormRoupa] = useState({ nome: '', numero: '', imagem: '' });
-  const [formRegra, setFormRegra] = useState({ categoria: 'Gerais', titulo: '', descricao: '', ordem: 1 });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('magnatas_email_user');
@@ -140,7 +136,7 @@ export default function App() {
     e.preventDefault();
     const userRef = doc(db, 'users', user.uid);
     await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
-    alert("Candidatura submetida!");
+    alert("Candidatura submetida com sucesso!");
   };
 
   const handleToggleRole = async (targetId, roleName) => {
@@ -152,7 +148,6 @@ export default function App() {
     await updateDoc(doc(db, 'users', targetId), { roles: updated });
   };
 
-  // Ecrã de Login/Registo
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0d0f12] text-gray-100 flex flex-col justify-center items-center p-6 font-sans">
@@ -221,7 +216,6 @@ export default function App() {
     );
   }
 
-  // Dashboard Completo e Estilizado
   return (
     <div className="min-h-screen bg-[#0d0f12] text-gray-200 font-sans flex">
       {/* Sidebar */}
@@ -293,14 +287,14 @@ export default function App() {
               <div className="flex gap-4">
                 <input 
                   type="text" 
-                  placeholder="Pesquisar por Nome In-Game, ID ou E-mail..." 
+                  placeholder="Pesquisar por Nome In-Game, ID ou Nome..." 
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="flex-1 bg-[#15181e] border border-neutral-800 p-3 rounded-2xl text-xs text-white focus:outline-none focus:border-red-600"
                 />
               </div>
 
-              {/* Tabela de Membros */}
+              {/* Tabela de Membros (Substituído e-mail por username) */}
               <div className="bg-[#15181e] border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
@@ -323,7 +317,7 @@ export default function App() {
                           <img src={m.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-8 h-8 rounded-full border border-neutral-700" />
                           <div>
                             <span className="font-bold text-white block">{m.nomeInGame || m.username}</span>
-                            <span className="text-[10px] text-neutral-500">{m.email}</span>
+                            <span className="text-[10px] text-neutral-400 font-bold">@{m.username}</span>
                           </div>
                         </td>
                         <td className="p-4 text-neutral-300">ID: <strong className="text-red-400">{m.idInGame || 'N/A'}</strong> | {m.idade || 'N/A'}</td>
