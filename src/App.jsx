@@ -40,7 +40,6 @@ export default function App() {
     { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' }
   ]);
 
-  // Captura imediata do Token do Discord
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -70,7 +69,6 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // Verifica Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -152,11 +150,13 @@ export default function App() {
     alert('Membro aprovado com sucesso!');
   };
 
+  const isApproved = user && userStatus === 'aprovado';
+
   return (
     <div className={darkMode ? "min-h-screen bg-[#121418] text-gray-200 font-sans flex" : "min-h-screen bg-gray-100 text-gray-800 font-sans flex"}>
       
-      {/* SIDEBAR SÓ APARECE SE O UTILIZADOR ESTIVER APROVADO */}
-      {user && userStatus === 'aprovado' && (
+      {/* 🛡️ SIDEBAR: SÓ APARECE SE ESTIVER 100% AUTENTICADO E APROVADO */}
+      {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
             <div className="p-6 flex items-center space-x-3 border-b border-neutral-800/50">
@@ -185,7 +185,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b bg-[#181b20] border-neutral-800 px-8 flex justify-between items-center sticky top-0 z-30">
           <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">
-            {user && userStatus === 'aprovado' ? 'PAINEL GESTÃO MAGNATAS 01' : 'PORTAL DE CANDIDATURA'}
+            {isApproved ? 'PAINEL GESTÃO MAGNATAS 01' : 'PORTAL DE CANDIDATURA - MAGNATAS 01'}
           </span>
           {user ? (
             <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition">
@@ -201,15 +201,17 @@ export default function App() {
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
           {!user ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
+              <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">🔑</div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
-              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema dos Magnatas 01.</p>
+              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema e submeter a tua candidatura aos Magnatas 01.</p>
               <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl transition">
                 VINCULAR DISCORD (OAUTH2)
               </button>
             </div>
           ) : userStatus === 'pendente_analise' ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
-              <h2 className="text-xl font-black text-white">⏳ Candidatura em Análise</h2>
+              <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">⏳</div>
+              <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
               <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
             </div>
           ) : userStatus !== 'aprovado' ? (
@@ -232,7 +234,7 @@ export default function App() {
                   <input 
                     type="text"
                     placeholder="Ex: 19 anos"
-                    value={formCzedidade => formCandidatura.idade}
+                    value={formCandidatura.idade}
                     onChange={(e) => setFormCandidatura({...formCandidatura, idade: e.target.value})}
                     className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
                   />
