@@ -10,9 +10,6 @@ import {
   updateDoc 
 } from 'firebase/firestore';
 
-// ==========================================
-// CONFIGURAÇÃO DO FIREBASE (APENAS FIRESTORE)
-// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCstl872xKUcdUwX5aQVFMkpo8v-R-9EoE",
   authDomain: "sitemagnatas01.firebaseapp.com",
@@ -26,44 +23,35 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ==========================================
-// CONFIGURAÇÃO OAUTH2 DISCORD
-// ==========================================
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
 const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
 
-const DISCORD_INVITE_LINK = "https://discord.gg/magnatas01";
-
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userStatus, setUserStatus] = useState('verificando'); 
+  const [userStatus, setUserStatus] = useState('pendente_candidatura'); 
   const [currentView, setCurrentView] = useState('gestao');
   const [subView, setSubView] = useState('membros'); 
   const [darkMode, setDarkMode] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [usersList, setUsersList] = useState([]);
-  const [stats, setStats] = useState({ ativos: 12, pendentes: 2, warnings: 0, staff: 1 });
-
+  
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
-
   const [candidaturas, setCandidaturas] = useState([
-    { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' },
-    { id: '2', nome: 'reys_fps', idInGame: '30492', idade: '17 anos', motivo: 'Recomendado pelo membro Ciganomano.', estado: 'pendente' }
+    { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' }
   ]);
 
-  // Processamento do Login do Discord via URL
+  // Captura imediata do Token do Discord
   useEffect(() => {
     const hash = window.location.hash;
+    const savedUser = localStorage.getItem('magnatas_discord_user');
+
     if (hash && hash.includes('access_token')) {
       const fragment = new URLSearchParams(hash.slice(1));
       const accessToken = fragment.get('access_token');
 
       if (accessToken) {
-        // Limpa a URL sem dar reload na página
         window.history.replaceState({}, document.title, window.location.pathname);
         
-        // Obtém o perfil diretamente do Discord
         fetch('https://discord.com/api/users/@me', {
           headers: { authorization: `Bearer ${accessToken}` }
         })
@@ -78,15 +66,17 @@ export default function App() {
                 : "https://cdn.discordapp.com/embed/avatars/0.png",
               discordTag: `@${discordUser.username}`
             };
+            
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // Verifica ou cria o perfil no Firestore
+            // Verifica Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
             if (docSnap.exists()) {
-              setUserStatus(docSnap.data().estado || 'pendente_candidatura');
+              const data = docSnap.data();
+              setUserStatus(data.estado || 'pendente_candidatura');
             } else {
               await setDoc(userRef, {
                 discordId: discordUser.id,
@@ -100,47 +90,32 @@ export default function App() {
             }
           }
         })
-        .catch(err => {
-          console.error("Erro ao obter perfil do Discord:", err);
-        });
+        .catch(err => console.error("Erro ao obter perfil:", err));
       }
-    } else {
-      const saved = localStorage.getItem('magnatas_discord_user');
-      if (saved) {
-        try {
-          const parsedUser = JSON.parse(saved);
-          setUser(parsedUser);
-          getDoc(doc(db, 'users', parsedUser.id)).then(docSnap => {
-            if (docSnap.exists()) {
-              setUserStatus(docSnap.data().estado || 'pendente_candidatura');
-            } else {
-              setUserStatus('pendente_candidatura');
-            }
-          });
-        } catch(e) {
-          localStorage.removeItem('magnatas_discord_user');
-        }
+    } else if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        setUser(parsed);
+        getDoc(doc(db, 'users', parsed.id)).then(docSnap => {
+          if (docSnap.exists()) {
+            setUserStatus(docSnap.data().estado || 'pendente_candidatura');
+          }
+        });
+      } catch(e) {
+        localStorage.removeItem('magnatas_discord_user');
       }
     }
   }, []);
 
-  // Sincronização de Membros em Tempo Real
   useEffect(() => {
-    const unsubscribeUsersCollection = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
-      let ativosCount = 0;
-
       snapshot.forEach((docSnap) => {
-        const info = docSnap.data();
-        members.push({ id: docSnap.id, ...info });
-        if (info.estado === 'aprovado') ativosCount++;
+        members.push({ id: docSnap.id, ...docSnap.data() });
       });
-
       setUsersList(members);
-      setStats(prev => ({ ...prev, ativos: ativosCount }));
     });
-
-    return () => unsubscribeUsersCollection();
+    return () => unsubscribe();
   }, []);
 
   const handleDiscordLogin = () => {
@@ -169,52 +144,33 @@ export default function App() {
     });
 
     setUserStatus('pendente_analise');
-    alert('Candidatura enviada com sucesso! Aguarda a aprovação da Staff.');
+    alert('Candidatura submetida com sucesso! Aguarda aprovação da liderança.');
   };
 
-  const handleAprovarCandidatura = async (id, discordId) => {
-    setCandidaturas(prev => prev.filter(c => c.id !== id));
-    if (discordId) {
-      await updateDoc(doc(db, 'users', discordId), { estado: 'aprovado', roles: ['01 Member´s'] });
-    }
-    alert('Candidatura aprovada com sucesso!');
-  };
-
-  const handleRejeitarCandidatura = (id) => {
-    setCandidaturas(prev => prev.filter(c => c.id !== id));
-    alert('Candidatura rejeitada.');
+  const handleAprovar = async (discordId) => {
+    await updateDoc(doc(db, 'users', discordId), { estado: 'aprovado' });
+    alert('Membro aprovado com sucesso!');
   };
 
   return (
     <div className={darkMode ? "min-h-screen bg-[#121418] text-gray-200 font-sans flex" : "min-h-screen bg-gray-100 text-gray-800 font-sans flex"}>
       
-      {/* SIDEBAR EXCLUSIVA PARA APROVADOS */}
+      {/* SIDEBAR SÓ APARECE SE O UTILIZADOR ESTIVER APROVADO */}
       {user && userStatus === 'aprovado' && (
-        <aside className={`w-64 border-r ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20`}>
+        <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
             <div className="p-6 flex items-center space-x-3 border-b border-neutral-800/50">
-              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-black text-white shadow-lg shadow-red-600/30">
-                🛡️
-              </div>
+              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-black text-white shadow-lg">🛡️</div>
               <span className="text-lg font-black tracking-wider text-red-500">MAGNATAS 01!</span>
             </div>
-
-            <nav className="p-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)]">
+            <nav className="p-4 space-y-1">
               {[
                 { id: 'gestao', label: 'Base da Gang', icon: '📂' },
-                { id: 'avisos', label: 'Avisos Gerais da Gang', icon: '🔔' },
-                { id: 'roupas', label: 'Roupas & Kits', icon: '👕' },
-                { id: 'radios', label: 'Frequências Rádio', icon: '📻' },
-                { id: 'regras', label: 'Regras Oficiais', icon: '📜' },
-                { id: 'cargos', label: 'Lista de Cargos', icon: '🏷️' },
-                { id: 'upgrade', label: 'Pedir Upgrade / Promoção', icon: '⭐' },
-                { id: 'autorizacoes', label: 'Autorizações (Calças/Manga)', icon: '✨' },
-                { id: 'punicoes', label: 'Meus Avisos / Punições', icon: '⚠️' },
-                { id: 'discord', label: 'Discord da Gang', icon: '💬' }
+                { id: 'membroslist', label: 'Lista de Membros', icon: '👥' }
               ].map((menu) => (
                 <button
                   key={menu.id}
-                  onClick={() => { setCurrentView(menu.id); if(menu.id === 'gestao') setSubView('membros'); }}
+                  onClick={() => setCurrentView(menu.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === menu.id ? 'bg-red-600/10 text-red-500 border border-red-600/20' : 'text-gray-400 hover:bg-neutral-800/40 hover:text-gray-200'}`}
                 >
                   <span>{menu.icon}</span>
@@ -227,62 +183,38 @@ export default function App() {
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        
-        <header className={`h-16 border-b ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} px-8 flex justify-between items-center sticky top-0 z-30 shadow-sm`}>
-          <div className="flex items-center gap-4">
-            <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">
-              {user && userStatus === 'aprovado' ? 'PAINEL GERAL DE MEMBROS' : 'PORTAL DE ACESSO - MAGNATAS 01'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {user ? (
-              <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition">
-                Sair ({user.username})
-              </button>
-            ) : (
-              <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold transition">
-                Entrar com Discord
-              </button>
-            )}
-          </div>
+        <header className="h-16 border-b bg-[#181b20] border-neutral-800 px-8 flex justify-between items-center sticky top-0 z-30">
+          <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">
+            {user && userStatus === 'aprovado' ? 'PAINEL GESTÃO MAGNATAS 01' : 'PORTAL DE CANDIDATURA'}
+          </span>
+          {user ? (
+            <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition">
+              Sair ({user.username})
+            </button>
+          ) : (
+            <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold transition">
+              Entrar com Discord
+            </button>
+          )}
         </header>
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
           {!user ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
-              <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">
-                🔑
-              </div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
-              <p className="text-neutral-400 text-xs leading-relaxed mb-8">
-                Efetua login com o Discord para aceder ao portal e submeter a tua candidatura aos Magnatas 01.
-              </p>
-              <button 
-                onClick={handleDiscordLogin}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs tracking-wider uppercase shadow-xl transition duration-200"
-              >
+              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema dos Magnatas 01.</p>
+              <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl transition">
                 VINCULAR DISCORD (OAUTH2)
               </button>
             </div>
           ) : userStatus === 'pendente_analise' ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
-              <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
-                ⏳
-              </div>
-              <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
-              <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso e está a ser avaliada pela liderança!</p>
+              <h2 className="text-xl font-black text-white">⏳ Candidatura em Análise</h2>
+              <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
             </div>
           ) : userStatus !== 'aprovado' ? (
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-emerald-600/10 text-emerald-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
-                  ✅
-                </div>
-                <h2 className="text-xl font-black text-white">Formulário de Candidatura</h2>
-                <p className="text-xs text-neutral-400">Preenche os dados abaixo para submeter a tua entrada:</p>
-              </div>
-
+              <h2 className="text-xl font-black text-white text-center">Formulário de Candidatura</h2>
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
                 <div>
                   <label className="text-xs text-neutral-400 font-bold block mb-1.5">ID In-Game</label>
@@ -291,91 +223,67 @@ export default function App() {
                     placeholder="Ex: 27356"
                     value={formCandidatura.idInGame}
                     onChange={(e) => setFormCandidatura({...formCandidatura, idInGame: e.target.value})}
-                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-600"
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
                     required
                   />
                 </div>
-
                 <div>
                   <label className="text-xs text-neutral-400 font-bold block mb-1.5">Idade na Vida Real</label>
                   <input 
                     type="text"
                     placeholder="Ex: 19 anos"
-                    value={formCandidatura.idade}
+                    value={formCzedidade => formCandidatura.idade}
                     onChange={(e) => setFormCandidatura({...formCandidatura, idade: e.target.value})}
-                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-600"
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
                   />
                 </div>
-
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">Por que queres entrar na Gang?</label>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">Motivo de Entrada</label>
                   <textarea 
                     placeholder="Explica a tua motivação..."
                     value={formCandidatura.motivo}
                     onChange={(e) => setFormCandidatura({...formCandidatura, motivo: e.target.value})}
-                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28 focus:outline-none focus:border-red-600"
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28"
                     required
                   ></textarea>
                 </div>
-
                 <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">
-                  Enviar Candidatura para Análise
+                  Submeter Candidatura
                 </button>
               </form>
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="flex gap-4 border-b border-neutral-800 pb-4">
-                <button onClick={() => setSubView('membros')} className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition ${subView === 'membros' ? 'bg-red-600 text-white' : 'bg-neutral-800/50 text-neutral-400'}`}>
-                  👥 Gestão de Membros
-                </button>
-                <button onClick={() => setSubView('candidaturas')} className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition ${subView === 'candidaturas' ? 'bg-red-600 text-white' : 'bg-neutral-800/50 text-neutral-400'}`}>
-                  ⏳ Candidaturas Pendentes
-                </button>
-              </div>
-
-              {subView === 'membros' && (
-                <div className="bg-[#181b20] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-neutral-800 text-[10px] font-black uppercase text-neutral-400 bg-neutral-900/50">
-                        <th className="p-4">Membro</th>
-                        <th className="p-4">ID In-Game</th>
-                        <th className="p-4">Discord</th>
-                        <th className="p-4">Estado</th>
+              <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
+              <div className="bg-[#181b20] border border-neutral-800 rounded-2xl overflow-hidden p-6">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-neutral-800 text-neutral-400">
+                      <th className="p-3">Membro</th>
+                      <th className="p-3">ID In-Game</th>
+                      <th className="p-3">Estado / Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800">
+                    {usersList.map((m) => (
+                      <tr key={m.id}>
+                        <td className="p-3 font-bold text-white">{m.username}</td>
+                        <td className="p-3 text-indigo-400">ID: {m.idInGame || 'Pendente'}</td>
+                        <td className="p-3">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${m.estado === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>
+                            {m.estado}
+                          </span>
+                          {m.estado !== 'aprovado' && (
+                            <button onClick={() => handleAprovar(m.id)} className="ml-3 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg">
+                              Aprovar
+                            </button>
+                          )}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-800/60 text-xs">
-                      {usersList.map((m, index) => (
-                        <tr key={index} className="hover:bg-neutral-800/30 transition">
-                          <td className="p-4 font-extrabold text-white">{m.username}</td>
-                          <td className="p-4 font-mono text-neutral-300">ID: {m.idInGame || 'N/A'}</td>
-                          <td className="p-4 text-indigo-400 font-bold">{m.discordTag}</td>
-                          <td className="p-4"><span className="bg-emerald-950 text-emerald-400 px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold">{m.estado}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {subView === 'candidaturas' && (
-                <div className="bg-[#181b20] border border-neutral-800/80 rounded-3xl p-8 space-y-6 shadow-2xl">
-                  <h2 className="text-xl font-black text-white">⏳ Candidaturas Pendentes</h2>
-                  {candidaturas.map((cand) => (
-                    <div key={cand.id} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex justify-between items-center gap-4">
-                      <div>
-                        <h3 className="font-extrabold text-white text-base">{cand.nome} (ID: {cand.idInGame})</h3>
-                        <p className="text-xs text-neutral-400 italic mt-1">"{cand.motivo}"</p>
-                      </div>
-                      <div className="flex gap-3">
-                        <button onClick={() => handleAprovarCandidatura(cand.id)} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold">✅ Aprovar</button>
-                        <button onClick={() => handleRejeitarCandidatura(cand.id)} className="bg-red-600 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold">❌ Rejeitar</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </main>
