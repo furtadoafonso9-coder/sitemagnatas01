@@ -11,7 +11,7 @@ import {
 
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
-const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
+const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds`;
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -21,7 +21,6 @@ export default function App() {
   
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
-  // 1. Processa Token do Discord e guarda os dados (ID + Username)
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -51,7 +50,6 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // Garante o registo do ID do Discord no Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -59,8 +57,8 @@ export default function App() {
               setUserStatus(docSnap.data().estado || 'pendente_candidatura');
             } else {
               await setDoc(userRef, {
-                discordId: discordUser.id,        // 🆔 Usado pelo BOT
-                username: discordUser.username,    // 👤 Nome do Discord
+                discordId: discordUser.id,
+                username: discordUser.username,
                 discordTag: profile.discordTag,
                 avatar: profile.avatar,
                 estado: 'pendente_candidatura',
@@ -87,7 +85,6 @@ export default function App() {
     }
   }, []);
 
-  // 2. Escuta membros em tempo real no Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -111,7 +108,6 @@ export default function App() {
     window.location.href = window.location.pathname;
   };
 
-  // Submete a candidatura associando ao ID do Discord do utilizador
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     if (!formCandidatura.idInGame || !formCandidatura.motivo) {
@@ -121,8 +117,8 @@ export default function App() {
 
     const userRef = doc(db, 'users', user.id);
     await updateDoc(userRef, {
-      discordId: user.id,             // 🆔 Re-confirma o ID para o Bot
-      username: user.username,         // 👤 Re-confirma o Username
+      discordId: user.id,
+      username: user.username,
       idInGame: formCandidatura.idInGame,
       idade: formCandidatura.idade || 'Não informada',
       motivo: formCandidatura.motivo,
@@ -136,7 +132,7 @@ export default function App() {
 
   const handleAprovar = async (discordId) => {
     await updateDoc(doc(db, 'users', discordId), { estado: 'aprovado' });
-    alert('Membro aprovado! O Bot já pode atualizar o cargo.');
+    alert('Membro aprovado com sucesso!');
   };
 
   const handleRejeitar = async (discordId) => {
@@ -159,8 +155,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
-      
-      {/* 🛡️ SIDEBAR SÓ PARA APROVADOS */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -195,7 +189,6 @@ export default function App() {
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
           {!user ? (
-            /* 1. LOGIN DISCORD */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
               <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">🔑</div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
@@ -205,14 +198,12 @@ export default function App() {
               </button>
             </div>
           ) : userStatus === 'pendente_analise' ? (
-            /* 2. CANDIDATURA EM ANÁLISE */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">⏳</div>
               <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
               <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda a validação da liderança para dar acesso ao painel e cargos no Discord!</p>
             </div>
           ) : userStatus === 'rejeitado' ? (
-            /* 3. REJEITADO (TENTAR NOVAMENTE) */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-red-600/10 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">❌</div>
               <h2 className="text-xl font-black text-white">Candidatura Rejeitada</h2>
@@ -225,7 +216,6 @@ export default function App() {
               </button>
             </div>
           ) : userStatus === 'aprovado' ? (
-            /* 4. PAINEL DE MEMBROS APROVADOS */
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
               <div className="bg-[#181b20] border border-neutral-800 rounded-2xl overflow-hidden p-6">
@@ -269,7 +259,6 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* 5. FORMULÁRIO COM DADOS DO DISCORD PRÉ-PREENCHIDOS */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <div className="text-center space-y-2">
                 <h2 className="text-xl font-black text-white">Formulário de Candidatura</h2>
