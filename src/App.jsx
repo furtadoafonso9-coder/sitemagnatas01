@@ -21,7 +21,6 @@ export default function App() {
   
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
-  // Processa o login do Discord via Hash na URL (#access_token)
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -30,7 +29,6 @@ export default function App() {
       const fragment = new URLSearchParams(hash.slice(1));
       const accessToken = fragment.get('access_token');
 
-      // Limpa a URL imediatamente
       window.history.replaceState({}, document.title, window.location.pathname);
 
       if (accessToken) {
@@ -52,7 +50,6 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // Grava/Verifica Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -88,7 +85,6 @@ export default function App() {
     }
   }, []);
 
-  // Leitura em tempo real
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -141,7 +137,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
       
-      {/* 🛡️ SIDEBAR: SÓ FICA VISÍVEL SE O MEMBRO TIVER ESTADO 'aprovado' */}
+      {/* 🛡️ SIDEBAR SÓ APARECE PARA MEMBROS APROVADOS */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -179,7 +175,7 @@ export default function App() {
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
               <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">🔑</div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
-              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema e submeter a tua candidatura aos Magnatas 01.</p>
+              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema e submeter a tua candidatura.</p>
               <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl transition">
                 VINCULAR DISCORD (OAUTH2)
               </button>
@@ -190,7 +186,41 @@ export default function App() {
               <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
               <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
             </div>
-          ) : userStatus !== 'aprovado' ? (
+          ) : userStatus === 'aprovado' ? (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
+              <div className="bg-[#181b20] border border-neutral-800 rounded-2xl overflow-hidden p-6">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-neutral-800 text-neutral-400">
+                      <th className="p-3">Membro</th>
+                      <th className="p-3">ID In-Game</th>
+                      <th className="p-3">Estado / Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800">
+                    {usersList.map((m) => (
+                      <tr key={m.id}>
+                        <td className="p-3 font-bold text-white">{m.username}</td>
+                        <td className="p-3 text-indigo-400">ID: {m.idInGame || 'Pendente'}</td>
+                        <td className="p-3">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${m.estado === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>
+                            {m.estado}
+                          </span>
+                          {m.estado !== 'aprovado' && (
+                            <button onClick={() => handleAprovar(m.id)} className="ml-3 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg">
+                              Aprovar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* 📝 FORMULÁRIO DE CANDIDATURA SIMPLES DIRETO */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <h2 className="text-xl font-black text-white text-center">Formulário de Candidatura</h2>
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
@@ -229,39 +259,6 @@ export default function App() {
                   Submeter Candidatura
                 </button>
               </form>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
-              <div className="bg-[#181b20] border border-neutral-800 rounded-2xl overflow-hidden p-6">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-neutral-800 text-neutral-400">
-                      <th className="p-3">Membro</th>
-                      <th className="p-3">ID In-Game</th>
-                      <th className="p-3">Estado / Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-800">
-                    {usersList.map((m) => (
-                      <tr key={m.id}>
-                        <td className="p-3 font-bold text-white">{m.username}</td>
-                        <td className="p-3 text-indigo-400">ID: {m.idInGame || 'Pendente'}</td>
-                        <td className="p-3">
-                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${m.estado === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>
-                            {m.estado}
-                          </span>
-                          {m.estado !== 'aprovado' && (
-                            <button onClick={() => handleAprovar(m.id)} className="ml-3 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg">
-                              Aprovar
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </div>
           )}
         </main>
