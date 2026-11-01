@@ -31,7 +31,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // ==========================================
-// CONFIGURAÇÃO OAUTH2 DISCORD (DEFINITIVA)
+// CONFIGURAÇÃO OAUTH2 DISCORD (FINAL)
 // ==========================================
 const DISCORD_CLIENT_ID = "1544523627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
@@ -40,6 +40,7 @@ const DISCORD_AUTH_URL = `https://discord.com/api/oauth2/authorize?client_id=${D
 export default function App() {
   const [user, setUser] = useState(null);
   const [currentView, setCurrentView] = useState('gestao');
+  const [subView, setSubView] = useState('membros'); // 'membros' ou 'candidaturas'
   const [darkMode, setDarkMode] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [usersList, setUsersList] = useState([]);
@@ -47,11 +48,17 @@ export default function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
 
-  // Estados para as Funcionalidades Avançadas
+  // Estados para Candidaturas e Funcionalidades
+  const [candidaturas, setCandidaturas] = useState([
+    { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' },
+    { id: '2', nome: 'reys_fps', idInGame: '30492', idade: '17 anos', motivo: 'Recomendado pelo membro Ciganomano.', estado: 'pendente' }
+  ]);
+
   const [auditLogs] = useState([
     { id: 1, acao: "Mute Aplicado", mod: "Staff Athos", alvo: "P0ker NoSleep", data: "Há 10 min" },
     { id: 2, acao: "Cargo Adicionado", mod: "01 Founder", alvo: "soso.exe 01!", data: "Há 1 hora" }
   ]);
+  
   const [radios] = useState([
     { id: 1, nome: "Frequência Principal Gang", freq: "101.5 MHz", status: "Ativa" },
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
@@ -79,7 +86,6 @@ export default function App() {
           setUser(profile);
           localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-          // Grava ou atualiza na coleção 'users' do Firestore
           const userRef = doc(db, 'users', discordUser.id);
           const initialData = {
             discordId: discordUser.id,
@@ -102,18 +108,17 @@ export default function App() {
     }
   }, []);
 
-  // Leitura em Tempo Real da Coleção de Membros do Firestore
+  // Leitura em Tempo Real do Firestore
   useEffect(() => {
     const unsubscribeUsersCollection = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
       let ativosCount = 0;
-      let pendentesCount = 0;
+      let pendentesCount = candidaturas.length;
 
       snapshot.forEach((docSnap) => {
         const info = docSnap.data();
         members.push({ id: docSnap.id, ...info });
         if (info.estado === 'aprovado') ativosCount++;
-        else pendentesCount++;
       });
 
       setUsersList(members);
@@ -127,40 +132,27 @@ export default function App() {
     });
 
     return () => unsubscribeUsersCollection();
-  }, []);
+  }, [candidaturas.length]);
 
-  // Redirecionamento Direto para o Discord OAuth2
   const handleDiscordLogin = () => {
     window.location.href = DISCORD_AUTH_URL;
   };
 
-  // Terminar Sessão
   const handleLogout = () => {
     localStorage.removeItem('magnatas_discord_user');
     setUser(null);
   };
 
-  // Forçar Sincronização de Cargos com o Bot
-  const handleForceSync = async () => {
-    if (!user) return;
-    setSyncLoading(true);
-    setSyncMessage('A comunicar com o Bot do Discord...');
-
-    try {
-      const userRef = doc(db, 'users', user.id);
-      await updateDoc(userRef, {
-        lastSyncRequest: new Date().toISOString()
-      });
-      setSyncMessage('✅ Sinal enviado! O Bot aplicará as alterações no servidor.');
-    } catch (error) {
-      setSyncMessage('❌ Erro de sincronização.');
-    } finally {
-      setSyncLoading(false);
-      setTimeout(() => setSyncMessage(''), 4000);
-    }
+  const handleAprovarCandidatura = (id) => {
+    setCandidaturas(prev => prev.filter(c => c.id !== id));
+    alert('Candidatura aprovada com sucesso!');
   };
 
-  // Filtragem de Membros para a Tabela
+  const handleRejeitarCandidatura = (id) => {
+    setCandidaturas(prev => prev.filter(c => c.id !== id));
+    alert('Candidatura rejeitada.');
+  };
+
   const filteredMembers = usersList.filter(m => 
     (m.username && m.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (m.idInGame && m.idInGame.toString().includes(searchTerm)) ||
@@ -170,10 +162,9 @@ export default function App() {
   return (
     <div className={darkMode ? "min-h-screen bg-[#121418] text-gray-200 font-sans flex" : "min-h-screen bg-gray-100 text-gray-800 font-sans flex"}>
       
-      {/* 📁 BARRA LATERAL (SIDEBAR MAGNATAS 01) */}
+      {/* 📁 SIDEBAR */}
       <aside className={`w-64 border-r ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20`}>
         <div>
-          {/* LOGÓTIPO TOPO */}
           <div className="p-6 flex items-center space-x-3 border-b border-neutral-800/50">
             <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-black text-white shadow-lg shadow-red-600/30">
               🛡️
@@ -181,7 +172,6 @@ export default function App() {
             <span className="text-lg font-black tracking-wider text-red-500">MAGNATAS 01!</span>
           </div>
 
-          {/* MENU DE NAVEGAÇÃO LATERAL */}
           <nav className="p-4 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)]">
             {[
               { id: 'gestao', label: 'Base da Gang', icon: '📂' },
@@ -197,7 +187,7 @@ export default function App() {
             ].map((menu) => (
               <button
                 key={menu.id}
-                onClick={() => setCurrentView(menu.id)}
+                onClick={() => { setCurrentView(menu.id); if(menu.id === 'gestao') setSubView('membros'); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === menu.id ? 'bg-red-600/10 text-red-500 border border-red-600/20' : 'text-gray-400 hover:bg-neutral-800/40 hover:text-gray-200'}`}
               >
                 <span>{menu.icon}</span>
@@ -207,7 +197,6 @@ export default function App() {
           </nav>
         </div>
 
-        {/* BOTÃO ADMIN E PERFIL */}
         <div className="p-4 border-t border-neutral-800/50 space-y-2">
           <button 
             onClick={() => setCurrentView('admin')}
@@ -227,10 +216,9 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 🖥️ ÁREA DE CONTEÚDO PRINCIPAL */}
+      {/* 🖥️ CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        {/* CABEÇALHO SUPERIOR */}
         <header className={`h-16 border-b ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} px-8 flex justify-between items-center sticky top-0 z-30 shadow-sm`}>
           <div className="flex items-center gap-4">
             <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">
@@ -255,26 +243,18 @@ export default function App() {
             </button>
 
             {user ? (
-              <button 
-                onClick={handleLogout} 
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition"
-              >
+              <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition">
                 Sair
               </button>
             ) : (
-              <button 
-                onClick={handleDiscordLogin} 
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition"
-              >
+              <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition">
                 Entrar com Discord
               </button>
             )}
           </div>
         </header>
 
-        {/* CONTEÚDO DINÂMICO */}
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
-          
           {!user ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
               <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">
@@ -282,7 +262,7 @@ export default function App() {
               </div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
               <p className="text-neutral-400 text-xs leading-relaxed mb-8">
-                Para aceder à plataforma e sincronizar os teus cargos no Discord do Magnatas 01, é necessário efetuar login com a tua conta do Discord.
+                Para aceder à plataforma e sincronizar os teus cargos no Discord do Magnatas 01, efetua login com a tua conta do Discord.
               </p>
               <button 
                 onClick={handleDiscordLogin}
@@ -295,15 +275,28 @@ export default function App() {
             <>
               {currentView === 'gestao' && (
                 <>
+                  {/* ABAS: MEMBROS / CANDIDATURAS */}
                   <div className="flex gap-4 border-b border-neutral-800 pb-4">
-                    <button className="bg-red-600 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg shadow-red-600/30 flex items-center gap-2">
+                    <button 
+                      onClick={() => setSubView('membros')}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition flex items-center gap-2 ${subView === 'membros' ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' : 'bg-neutral-800/50 text-neutral-400 hover:text-white'}`}
+                    >
                       <span>👥</span> Gestão Geral de Membros
                     </button>
-                    <button className="bg-neutral-800/50 text-neutral-400 hover:text-white px-5 py-2.5 rounded-xl text-xs font-bold transition">
+                    <button 
+                      onClick={() => setSubView('candidaturas')}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition flex items-center gap-2 relative ${subView === 'candidaturas' ? 'bg-red-600 text-white shadow-lg shadow-red-600/30' : 'bg-neutral-800/50 text-neutral-400 hover:text-white'}`}
+                    >
                       <span>⏳</span> Candidaturas Pendentes
+                      {candidaturas.length > 0 && (
+                        <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full">
+                          {candidaturas.length}
+                        </span>
+                      )}
                     </button>
                   </div>
 
+                  {/* CARDS */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
                       <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center font-bold text-lg border border-emerald-500/20">👥</div>
@@ -317,7 +310,7 @@ export default function App() {
                       <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-xl flex items-center justify-center font-bold text-lg border border-amber-500/20">⏳</div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Pendentes</p>
-                        <h3 className="text-2xl font-black text-white">{stats.pendentes}</h3>
+                        <h3 className="text-2xl font-black text-white">{candidaturas.length}</h3>
                       </div>
                     </div>
 
@@ -333,86 +326,142 @@ export default function App() {
                       <div className="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-xl flex items-center justify-center font-bold text-lg border border-purple-500/20">👑</div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Founders / Staff</p>
-                        <h3 className="text-2xl font-black text-white">{stats.staff}</h3>
+                        <h3 className="text-2xl font-black text-white">1</h3>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[#181b20] p-4 rounded-2xl border border-neutral-800/80 shadow-lg">
-                    <input 
-                      type="text"
-                      placeholder="Pesquisar por Nome In-Game, ID, Motivo..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full md:w-96 bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-red-600 transition"
-                    />
-                  </div>
+                  {/* SUB-VISTA: MEMBROS */}
+                  {subView === 'membros' && (
+                    <>
+                      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[#181b20] p-4 rounded-2xl border border-neutral-800/80 shadow-lg">
+                        <input 
+                          type="text"
+                          placeholder="Pesquisar por Nome In-Game, ID, Motivo..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full md:w-96 bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-red-600 transition"
+                        />
+                      </div>
 
-                  <div className="bg-[#181b20] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-neutral-800 text-[10px] font-black uppercase text-neutral-400 bg-neutral-900/50">
-                          <th className="p-4">Membro</th>
-                          <th className="p-4">ID / Idade</th>
-                          <th className="p-4">Discord</th>
-                          <th className="p-4">Estado</th>
-                          <th className="p-4">Cargos Atribuídos</th>
-                          <th className="p-4 text-right">Gerir Cargos</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-800/60 text-xs">
-                        {filteredMembers.length > 0 ? (
-                          filteredMembers.map((m, index) => (
-                            <tr key={index} className="hover:bg-neutral-800/30 transition">
-                              <td className="p-4 flex items-center gap-3">
-                                <div className="w-9 h-9 bg-neutral-800 rounded-xl flex items-center justify-center font-bold text-red-500 border border-neutral-700">
-                                  {m.username ? m.username.charAt(0) : 'M'}
-                                </div>
-                                <div>
-                                  <p className="font-extrabold text-white">{m.username || 'Membro'}</p>
-                                  <p className="text-[10px] text-neutral-500">ID Discord: {m.id}</p>
-                                </div>
-                              </td>
-                              <td className="p-4 font-mono text-neutral-300">
-                                ID: <span className="text-white font-bold">{m.idInGame || '27356'}</span> | {m.age || '16 anos'}
-                              </td>
-                              <td className="p-4">
-                                <span className="text-indigo-400 font-bold">{m.discordTag || 'Não vinculado'}</span>
-                              </td>
-                              <td className="p-4">
-                                <span className="bg-emerald-950 text-emerald-400 border border-emerald-800/40 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase">
-                                  {m.estado || 'aprovado'}
-                                </span>
-                              </td>
-                              <td className="p-4">
-                                <div className="flex flex-wrap gap-1.5">
-                                  {(m.roles || ['01 Member´s']).map((role, rIdx) => (
-                                    <span key={rIdx} className="bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 px-2 py-0.5 rounded-md text-[10px] font-bold">
-                                      {role}
-                                    </span>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="p-4 text-right">
-                                <button className="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold border border-neutral-700 transition">
-                                  + Cargos (Discord 💬)
-                                </button>
-                              </td>
+                      <div className="bg-[#181b20] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-neutral-800 text-[10px] font-black uppercase text-neutral-400 bg-neutral-900/50">
+                              <th className="p-4">Membro</th>
+                              <th className="p-4">ID / Idade</th>
+                              <th className="p-4">Discord</th>
+                              <th className="p-4">Estado</th>
+                              <th className="p-4">Cargos Atribuídos</th>
+                              <th className="p-4 text-right">Gerir Cargos</th>
                             </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan="6" className="p-8 text-center text-neutral-500">
-                              A carregar membros do Firestore em tempo real...
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-800/60 text-xs">
+                            {filteredMembers.length > 0 ? (
+                              filteredMembers.map((m, index) => (
+                                <tr key={index} className="hover:bg-neutral-800/30 transition">
+                                  <td className="p-4 flex items-center gap-3">
+                                    <div className="w-9 h-9 bg-neutral-800 rounded-xl flex items-center justify-center font-bold text-red-500 border border-neutral-700">
+                                      {m.username ? m.username.charAt(0) : 'M'}
+                                    </div>
+                                    <div>
+                                      <p className="font-extrabold text-white">{m.username || 'Membro'}</p>
+                                      <p className="text-[10px] text-neutral-500">ID Discord: {m.id}</p>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 font-mono text-neutral-300">
+                                    ID: <span className="text-white font-bold">{m.idInGame || '27356'}</span> | {m.age || '16 anos'}
+                                  </td>
+                                  <td className="p-4">
+                                    <span className="text-indigo-400 font-bold">{m.discordTag || 'Não vinculado'}</span>
+                                  </td>
+                                  <td className="p-4">
+                                    <span className="bg-emerald-950 text-emerald-400 border border-emerald-800/40 px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase">
+                                      {m.estado || 'aprovado'}
+                                    </span>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {(m.roles || ['01 Member´s']).map((role, rIdx) => (
+                                        <span key={rIdx} className="bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                          {role}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <button className="bg-neutral-800 hover:bg-neutral-700 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold border border-neutral-700 transition">
+                                      + Cargos (Discord 💬)
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="6" className="p-8 text-center text-neutral-500">
+                                  A carregar membros do Firestore em tempo real...
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+
+                  {/* SUB-VISTA: CANDIDATURAS PENDENTES */}
+                  {subView === 'candidaturas' && (
+                    <div className="bg-[#181b20] border border-neutral-800/80 rounded-3xl p-8 space-y-6 shadow-2xl">
+                      <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
+                        <div>
+                          <h2 className="text-xl font-black text-white">⏳ Candidaturas Pendentes</h2>
+                          <p className="text-xs text-neutral-400">Analisa e aprova novos membros para a gang Magnatas 01.</p>
+                        </div>
+                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-xl text-xs font-bold">
+                          Total: {candidaturas.length}
+                        </span>
+                      </div>
+
+                      {candidaturas.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-4">
+                          {candidaturas.map((cand) => (
+                            <div key={cand.id} className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-3">
+                                  <h3 className="font-extrabold text-white text-base">{cand.nome}</h3>
+                                  <span className="text-[10px] bg-neutral-800 px-2.5 py-0.5 rounded-md font-mono text-indigo-400">ID In-Game: {cand.idInGame}</span>
+                                  <span className="text-[10px] bg-neutral-800 px-2.5 py-0.5 rounded-md text-neutral-300">{cand.idade}</span>
+                                </div>
+                                <p className="text-xs text-neutral-400 italic">"{cand.motivo}"</p>
+                              </div>
+                              <div className="flex gap-3 w-full md:w-auto">
+                                <button 
+                                  onClick={() => handleAprovarCandidatura(cand.id)}
+                                  className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition"
+                                >
+                                  ✅ Aprovar
+                                </button>
+                                <button 
+                                  onClick={() => handleRejeitarCandidatura(cand.id)}
+                                  className="flex-1 md:flex-none bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition"
+                                >
+                                  ❌ Rejeitar
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-12 text-center text-neutral-500">
+                          🎉 Não existem candidaturas pendentes de momento!
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 
+              {/* OUTRAS VISTAS DO SISTEMA */}
               {currentView === 'radios' && (
                 <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
                   <h2 className="text-xl font-bold text-white">📻 Frequências de Comunicação da Gang</h2>
@@ -473,34 +522,14 @@ export default function App() {
               {currentView === 'perfil' && (
                 <div className="max-w-2xl mx-auto bg-[#181b20] border border-neutral-800 p-8 rounded-3xl shadow-xl space-y-6">
                   <div className="flex items-center gap-6">
-                    <img 
-                      src={user.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} 
-                      alt="Avatar" 
-                      className="w-20 h-20 rounded-2xl border-2 border-red-500 shadow-md object-cover" 
-                    />
+                    <img src={user.avatar} alt="Avatar" className="w-20 h-20 rounded-2xl border-2 border-red-500 shadow-md object-cover" />
                     <div>
                       <h2 className="text-xl font-bold text-white">{user.username}</h2>
                       <p className="text-xs text-neutral-400">{user.discordTag}</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[10px] bg-indigo-950 text-indigo-400 border border-indigo-800/50 px-2.5 py-0.5 rounded-md font-mono">
-                          ID Discord: {user.id}
-                        </span>
-                      </div>
+                      <span className="mt-2 inline-block text-[10px] bg-indigo-950 text-indigo-400 border border-indigo-800/50 px-2.5 py-0.5 rounded-md font-mono">
+                        ID Discord: {user.id}
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="pt-6 border-t border-neutral-800">
-                    <h3 className="text-sm font-bold text-white mb-3">Sincronização com o Bot</h3>
-                    <button 
-                      onClick={handleForceSync}
-                      disabled={syncLoading}
-                      className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg shadow-red-600/20 transition"
-                    >
-                      {syncLoading ? 'A processar...' : '🔄 Forçar Sincronização de Cargos'}
-                    </button>
-                    {syncMessage && (
-                      <p className="text-xs text-center mt-3 text-emerald-400 font-bold">{syncMessage}</p>
-                    )}
                   </div>
                 </div>
               )}
@@ -509,17 +538,13 @@ export default function App() {
                 <div className="bg-[#181b20] border border-neutral-800 p-12 rounded-3xl text-center shadow-xl">
                   <h2 className="text-2xl font-black mb-2 text-white uppercase tracking-wider">Secção: {currentView}</h2>
                   <p className="text-xs text-neutral-400 mb-6">Esta funcionalidade está sincronizada com a base de dados do Magnatas 01.</p>
-                  <button 
-                    onClick={() => setCurrentView('gestao')} 
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg transition"
-                  >
+                  <button onClick={() => setCurrentView('gestao')} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg transition">
                     Voltar à Base da Gang
                   </button>
                 </div>
               )}
             </>
           )}
-
         </main>
       </div>
     </div>
