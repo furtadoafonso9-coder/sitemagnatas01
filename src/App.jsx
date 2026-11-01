@@ -23,8 +23,9 @@ const firebaseConfig = {
   measurementId: "G-Q57NRPGDVE"
 };
 
+// Inicialização estritamente focada no Firestore (Sem Auth do Firebase)
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app); // Apenas Firestore, sem dependências de Auth problemáticas!
+const db = getFirestore(app);
 
 // ==========================================
 // CONFIGURAÇÃO OAUTH2 DISCORD
@@ -53,17 +54,7 @@ export default function App() {
     { id: '2', nome: 'reys_fps', idInGame: '30492', idade: '17 anos', motivo: 'Recomendado pelo membro Ciganomano.', estado: 'pendente' }
   ]);
 
-  const [auditLogs] = useState([
-    { id: 1, acao: "Mute Aplicado", mod: "Staff Athos", alvo: "P0ker NoSleep", data: "Há 10 min" },
-    { id: 2, acao: "Cargo Adicionado", mod: "01 Founder", alvo: "soso.exe 01!", data: "Há 1 hora" }
-  ]);
-  
-  const [radios] = useState([
-    { id: 1, nome: "Frequência Principal Gang", freq: "101.5 MHz", status: "Ativa" },
-    { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
-  ]);
-
-  // Captura do Token do Discord na URL e Gestão de Estado
+  // Captura do Token do Discord diretamente na URL (#access_token)
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
@@ -89,21 +80,6 @@ export default function App() {
             };
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
-
-            try {
-              const guildsRes = await fetch('https://discord.com/api/users/@me/guilds', {
-                headers: { authorization: `Bearer ${accessToken}` }
-              });
-              const guilds = await guildsRes.json();
-              const isInServer = Array.isArray(guilds) && guilds.some(g => g.id === MAGNATAS_GUILD_ID);
-
-              if (!isInServer && MAGNATAS_GUILD_ID !== "123456789012345678") {
-                setUserStatus('fora_do_servidor');
-                return;
-              }
-            } catch (e) {
-              console.warn("Verificação de grémios ignorada por restrição de CORS.");
-            }
 
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
@@ -239,16 +215,6 @@ export default function App() {
               ))}
             </nav>
           </div>
-
-          <div className="p-4 border-t border-neutral-800/50 space-y-2">
-            <button 
-              onClick={() => setCurrentView('admin')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'admin' ? 'bg-amber-600 text-white' : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20'}`}
-            >
-              <span>⚙️</span>
-              <span>Painel Admin & Suporte</span>
-            </button>
-          </div>
         </aside>
       )}
 
@@ -290,19 +256,6 @@ export default function App() {
               >
                 VINCULAR DISCORD (OAUTH2)
               </button>
-            </div>
-          ) : userStatus === 'fora_do_servidor' ? (
-            <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-red-500/30 shadow-2xl space-y-6">
-              <div className="w-20 h-20 bg-red-600/10 text-red-500 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black">
-                ⚠️
-              </div>
-              <h1 className="text-2xl font-black text-white">Servidor Não Encontrado</h1>
-              <p className="text-neutral-400 text-xs leading-relaxed">
-                Olá, <span className="text-indigo-400 font-bold">{user.username}</span>! Não estás no servidor oficial do Discord dos Magnatas 01.
-              </p>
-              <a href={DISCORD_INVITE_LINK} target="_blank" rel="noreferrer" className="inline-block bg-indigo-600 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl">
-                Entrar no Discord dos Magnatas 01
-              </a>
             </div>
           ) : userStatus === 'pendente_analise' ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
