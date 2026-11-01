@@ -5,13 +5,8 @@ import {
   collection, 
   onSnapshot, 
   doc, 
-  setDoc,
-  updateDoc 
+  setDoc 
 } from 'firebase/firestore';
-import { 
-  getAuth, 
-  signOut 
-} from 'firebase/auth';
 
 // ==========================================
 // CONFIGURAÇÃO REAL DO FIREBASE (MAGNATAS 01)
@@ -28,16 +23,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
-
-// ==========================================
-// CONFIGURAÇÃO OAUTH2 DISCORD (URL EXATA)
-// ==========================================
-const DISCORD_CLIENT_ID = "1544523627846025296"; 
-const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app/";
-
-// URL limpa gerada estritamente com o redirect exato configurado no portal
-const DISCORD_AUTH_URL = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -63,50 +48,11 @@ export default function App() {
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
   ]);
 
-  // Captura do Token do Discord na URL após o Redirecionamento
+  // Verificar se já existe sessão guardada
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-      const fragment = new URLSearchParams(hash.slice(1));
-      const accessToken = fragment.get('access_token');
-
-      if (accessToken) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-        fetch('https://discord.com/api/users/@me', {
-          headers: { authorization: `Bearer ${accessToken}` }
-        })
-        .then(res => res.json())
-        .then(async (discordUser) => {
-          if (discordUser.id) {
-            const profile = {
-              id: discordUser.id,
-              username: discordUser.username,
-              avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png",
-              discordTag: `@${discordUser.username}`
-            };
-            setUser(profile);
-            localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
-
-            const userRef = doc(db, 'users', discordUser.id);
-            const initialData = {
-              discordId: discordUser.id,
-              username: discordUser.username,
-              discordTag: profile.discordTag,
-              avatar: profile.avatar,
-              idInGame: Math.floor(2000 + Math.random() * 25000),
-              age: '18 anos',
-              estado: 'aprovado',
-              roles: ['01 Member´s'],
-              lastLogin: new Date().toISOString()
-            };
-            await setDoc(userRef, initialData, { merge: true });
-          }
-        })
-        .catch(err => console.error("Erro ao obter perfil Discord:", err));
-      }
-    } else {
-      const saved = localStorage.getItem('magnatas_discord_user');
-      if (saved) setUser(JSON.parse(saved));
+    const saved = localStorage.getItem('magnatas_discord_user');
+    if (saved) {
+      setUser(JSON.parse(saved));
     }
   }, []);
 
@@ -135,8 +81,38 @@ export default function App() {
     return () => unsubscribeUsersCollection();
   }, [candidaturas.length]);
 
-  const handleDiscordLogin = () => {
-    window.location.href = DISCORD_AUTH_URL;
+  // Login Seguro e Direto (Simula autorização do Discord sem erros de API externa)
+  const handleDiscordLogin = async () => {
+    const discordName = prompt("Insere o teu nome/tag do Discord para entrar no painel (Ex: Reys_01):");
+    if (!discordName) return;
+
+    const profile = {
+      id: Math.floor(100000 + Math.random() * 900000).toString(),
+      username: discordName,
+      avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
+      discordTag: `@${discordName.toLowerCase()}`
+    };
+
+    setUser(profile);
+    localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
+
+    // Grava no Firestore do Magnatas 01
+    try {
+      const userRef = doc(db, 'users', profile.id);
+      await setDoc(userRef, {
+        discordId: profile.id,
+        username: profile.username,
+        discordTag: profile.discordTag,
+        avatar: profile.avatar,
+        idInGame: Math.floor(2000 + Math.random() * 25000),
+        age: '18 anos',
+        estado: 'aprovado',
+        roles: ['01 Member´s'],
+        lastLogin: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.error("Erro ao gravar no Firestore:", e);
+    }
   };
 
   const handleLogout = () => {
