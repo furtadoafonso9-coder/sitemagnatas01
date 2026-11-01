@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 
 // ==========================================
-// CONFIGURAÇÃO REAL DO FIREBASE (MAGNATAS 01)
+// CONFIGURAÇÃO DO FIREBASE (APENAS FIRESTORE)
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCstl872xKUcdUwX5aQVFMkpo8v-R-9EoE",
@@ -23,7 +23,6 @@ const firebaseConfig = {
   measurementId: "G-Q57NRPGDVE"
 };
 
-// Inicialização estritamente focada no Firestore (Sem Auth do Firebase)
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -34,7 +33,6 @@ const DISCORD_CLIENT_ID = "1545423627846025296";
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
 const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
 
-const MAGNATAS_GUILD_ID = "123456789012345678"; 
 const DISCORD_INVITE_LINK = "https://discord.gg/magnatas01";
 
 export default function App() {
@@ -54,7 +52,7 @@ export default function App() {
     { id: '2', nome: 'reys_fps', idInGame: '30492', idade: '17 anos', motivo: 'Recomendado pelo membro Ciganomano.', estado: 'pendente' }
   ]);
 
-  // Captura do Token do Discord diretamente na URL (#access_token)
+  // Processamento do Login do Discord via URL
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
@@ -62,14 +60,16 @@ export default function App() {
       const accessToken = fragment.get('access_token');
 
       if (accessToken) {
+        // Limpa a URL sem dar reload na página
         window.history.replaceState({}, document.title, window.location.pathname);
         
+        // Obtém o perfil diretamente do Discord
         fetch('https://discord.com/api/users/@me', {
           headers: { authorization: `Bearer ${accessToken}` }
         })
         .then(res => res.json())
         .then(async (discordUser) => {
-          if (discordUser.id) {
+          if (discordUser && discordUser.id) {
             const profile = {
               id: discordUser.id,
               username: discordUser.username,
@@ -81,6 +81,7 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
+            // Verifica ou cria o perfil no Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -99,24 +100,31 @@ export default function App() {
             }
           }
         })
-        .catch(err => console.error("Erro ao obter perfil do Discord:", err));
+        .catch(err => {
+          console.error("Erro ao obter perfil do Discord:", err);
+        });
       }
     } else {
       const saved = localStorage.getItem('magnatas_discord_user');
       if (saved) {
-        const parsedUser = JSON.parse(saved);
-        setUser(parsedUser);
-        getDoc(doc(db, 'users', parsedUser.id)).then(docSnap => {
-          if (docSnap.exists()) {
-            setUserStatus(docSnap.data().estado || 'pendente_candidatura');
-          } else {
-            setUserStatus('pendente_candidatura');
-          }
-        });
+        try {
+          const parsedUser = JSON.parse(saved);
+          setUser(parsedUser);
+          getDoc(doc(db, 'users', parsedUser.id)).then(docSnap => {
+            if (docSnap.exists()) {
+              setUserStatus(docSnap.data().estado || 'pendente_candidatura');
+            } else {
+              setUserStatus('pendente_candidatura');
+            }
+          });
+        } catch(e) {
+          localStorage.removeItem('magnatas_discord_user');
+        }
       }
     }
   }, []);
 
+  // Sincronização de Membros em Tempo Real
   useEffect(() => {
     const unsubscribeUsersCollection = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -161,7 +169,7 @@ export default function App() {
     });
 
     setUserStatus('pendente_analise');
-    alert('Candidatura enviada com sucesso! Aguarda aprovação da Staff.');
+    alert('Candidatura enviada com sucesso! Aguarda a aprovação da Staff.');
   };
 
   const handleAprovarCandidatura = async (id, discordId) => {
