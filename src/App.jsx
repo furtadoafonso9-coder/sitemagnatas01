@@ -10,6 +10,9 @@ import {
   updateDoc 
 } from 'firebase/firestore';
 
+// ==========================================
+// CONFIGURAÇÃO REAL DO FIREBASE (SÓ FIRESTORE)
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyCstl872xKUcdUwX5aQVFMkpo8v-R-9EoE",
   authDomain: "sitemagnatas01.firebaseapp.com",
@@ -23,67 +26,75 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// ==========================================
+// OAUTH2 DO DISCORD (SEM DEPENDÊNCIA DE BACKEND/AUTH)
+// ==========================================
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
 const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userStatus, setUserStatus] = useState('pendente_candidatura'); 
+  const [userStatus, setUserStatus] = useState('pendente_candidatura'); // 'pendente_candidatura', 'pendente_analise', 'aprovado'
   const [currentView, setCurrentView] = useState('gestao');
   const [usersList, setUsersList] = useState([]);
+  
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
+  // Captura do Token na URL e Limpeza Imediata
   useEffect(() => {
-    try {
-      const hash = window.location.hash;
-      const savedUser = localStorage.getItem('magnatas_discord_user');
+    const hash = window.location.hash;
+    const savedUser = localStorage.getItem('magnatas_discord_user');
 
-      if (hash && hash.includes('access_token')) {
-        const fragment = new URLSearchParams(hash.slice(1));
-        const accessToken = fragment.get('access_token');
-        window.history.replaceState({}, document.title, window.location.pathname);
+    if (hash && hash.includes('access_token')) {
+      const fragment = new URLSearchParams(hash.slice(1));
+      const accessToken = fragment.get('access_token');
 
-        if (accessToken) {
-          fetch('https://discord.com/api/users/@me', {
-            headers: { authorization: `Bearer ${accessToken}` }
-          })
-          .then(res => res.json())
-          .then(async (discordUser) => {
-            if (discordUser && discordUser.id) {
-              const profile = {
-                id: discordUser.id,
+      // Limpa a URL imediatamente para que a Vercel/Navegador não tente reprocessar a rota
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      if (accessToken) {
+        fetch('https://discord.com/api/users/@me', {
+          headers: { authorization: `Bearer ${accessToken}` }
+        })
+        .then(res => res.json())
+        .then(async (discordUser) => {
+          if (discordUser && discordUser.id) {
+            const profile = {
+              id: discordUser.id,
+              username: discordUser.username,
+              avatar: discordUser.avatar 
+                ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` 
+                : "https://cdn.discordapp.com/embed/avatars/0.png",
+              discordTag: `@${discordUser.username}`
+            };
+            
+            setUser(profile);
+            localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
+
+            // Grava ou consulta o estado do utilizador no Firestore
+            const userRef = doc(db, 'users', discordUser.id);
+            const docSnap = await getDoc(userRef);
+            
+            if (docSnap.exists()) {
+              setUserStatus(docSnap.data().estado || 'pendente_candidatura');
+            } else {
+              await setDoc(userRef, {
+                discordId: discordUser.id,
                 username: discordUser.username,
-                avatar: discordUser.avatar 
-                  ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` 
-                  : "https://cdn.discordapp.com/embed/avatars/0.png",
-                discordTag: `@${discordUser.username}`
-              };
-              
-              setUser(profile);
-              localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
-
-              const userRef = doc(db, 'users', discordUser.id);
-              const docSnap = await getDoc(userRef);
-              
-              if (docSnap.exists()) {
-                setUserStatus(docSnap.data().estado || 'pendente_candidatura');
-              } else {
-                await setDoc(userRef, {
-                  discordId: discordUser.id,
-                  username: discordUser.username,
-                  discordTag: profile.discordTag,
-                  avatar: profile.avatar,
-                  estado: 'pendente_candidatura',
-                  lastLogin: new Date().toISOString()
-                });
-                setUserStatus('pendente_candidatura');
-              }
+                discordTag: profile.discordTag,
+                avatar: profile.avatar,
+                estado: 'pendente_candidatura',
+                lastLogin: new Date().toISOString()
+              });
+              setUserStatus('pendente_candidatura');
             }
-          })
-          .catch(err => console.error("Erro interno no fetch do Discord:", err));
-        }
-      } else if (savedUser) {
+          }
+        })
+        .catch(err => console.error("Erro ao validar token com a API do Discord:", err));
+      }
+    } else if (savedUser) {
+      try {
         const parsed = JSON.parse(savedUser);
         setUser(parsed);
         getDoc(doc(db, 'users', parsed.id)).then(docSnap => {
@@ -91,12 +102,13 @@ export default function App() {
             setUserStatus(docSnap.data().estado || 'pendente_candidatura');
           }
         }).catch(() => {});
+      } catch(e) {
+        localStorage.removeItem('magnatas_discord_user');
       }
-    } catch (e) {
-      console.error("Erro capturado:", e);
     }
   }, []);
 
+  // Sincronização dos Membros em Tempo Real
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -104,9 +116,8 @@ export default function App() {
         members.push({ id: docSnap.id, ...docSnap.data() });
       });
       setUsersList(members);
-    }, (error) => {
-      console.error("Erro no Firestore:", error);
-    });
+    }, (err) => console.error("Erro na escuta do Firestore:", err));
+    
     return () => unsubscribe();
   }, []);
 
@@ -124,7 +135,7 @@ export default function App() {
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     if (!formCandidatura.idInGame || !formCandidatura.motivo) {
-      alert('Preenche todos os campos obrigatórios!');
+      alert('Preenche os campos obrigatórios!');
       return;
     }
 
@@ -137,7 +148,7 @@ export default function App() {
     });
 
     setUserStatus('pendente_analise');
-    alert('Candidatura submetida com sucesso! Aguarda aprovação da liderança.');
+    alert('Candidatura submetida com sucesso!');
   };
 
   const handleAprovar = async (discordId) => {
@@ -149,6 +160,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
+      
+      {/* 🛡️ SIDEBAR SÓ FICA VISÍVEL SE ESTIVER APROVADO */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -184,7 +197,7 @@ export default function App() {
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
           {!user ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
-              <div className="w-20 h-20 bg-indigo-600/15 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">🔑</div>
+              <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">🔑</div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
               <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema e submeter a tua candidatura aos Magnatas 01.</p>
               <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl transition">
