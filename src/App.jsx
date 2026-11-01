@@ -151,7 +151,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
-      
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
