@@ -31,15 +31,14 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // ==========================================
-// CONFIGURAÇÃO OAUTH2 DISCORD (CORRIGIDA)
+// CONFIGURAÇÃO OAUTH2 DISCORD (DEFINITIVA)
 // ==========================================
 const DISCORD_CLIENT_ID = "1544523627846025296"; 
-const REDIRECT_URI = encodeURIComponent("https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app");
-const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=token&scope=identify%20guilds%20email`;
+const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
+const DISCORD_AUTH_URL = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState(null);
   const [currentView, setCurrentView] = useState('gestao');
   const [darkMode, setDarkMode] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,11 +48,11 @@ export default function App() {
   const [syncMessage, setSyncMessage] = useState('');
 
   // Estados para as Funcionalidades Avançadas
-  const [auditLogs, setAuditLogs] = useState([
+  const [auditLogs] = useState([
     { id: 1, acao: "Mute Aplicado", mod: "Staff Athos", alvo: "P0ker NoSleep", data: "Há 10 min" },
     { id: 2, acao: "Cargo Adicionado", mod: "01 Founder", alvo: "soso.exe 01!", data: "Há 1 hora" }
   ]);
-  const [radios, setRadios] = useState([
+  const [radios] = useState([
     { id: 1, nome: "Frequência Principal Gang", freq: "101.5 MHz", status: "Ativa" },
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
   ]);
@@ -139,7 +138,6 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('magnatas_discord_user');
     setUser(null);
-    setUserData(null);
   };
 
   // Forçar Sincronização de Cargos com o Bot
@@ -241,7 +239,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Badges de Cargos no Topo */}
             <div className="hidden xl:flex items-center gap-1.5 flex-wrap">
               {["HOMEM", "STREAMER", "STAFF ATHOS PVP", "SUPORT", "01 DEV", "OWNER", "MULHER", "01 FOUNDER´S", "CONTA ALT"].map((badge, idx) => (
                 <span key={idx} className="bg-neutral-800/80 border border-neutral-700/60 text-gray-300 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm">
@@ -253,7 +250,6 @@ export default function App() {
             <button 
               onClick={() => setDarkMode(!darkMode)}
               className="p-2 rounded-xl bg-neutral-800 text-yellow-400 border border-neutral-700 text-xs font-bold hover:bg-neutral-700 transition"
-              title="Alternar Tema"
             >
               {darkMode ? '☀️' : '🌙'}
             </button>
@@ -280,7 +276,6 @@ export default function App() {
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
           
           {!user ? (
-            /* TELA DE AUTENTICAÇÃO OBRIGATÓRIA */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
               <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">
                 🔑
@@ -298,7 +293,6 @@ export default function App() {
             </div>
           ) : (
             <>
-              {/* VISTA 1: BASE DA GANG */}
               {currentView === 'gestao' && (
                 <>
                   <div className="flex gap-4 border-b border-neutral-800 pb-4">
@@ -310,7 +304,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* CARDS DE ESTATÍSTICAS */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-[#181b20] border border-neutral-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
                       <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center font-bold text-lg border border-emerald-500/20">👥</div>
@@ -345,7 +338,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* PESQUISA E FILTROS */}
                   <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[#181b20] p-4 rounded-2xl border border-neutral-800/80 shadow-lg">
                     <input 
                       type="text"
@@ -354,18 +346,8 @@ export default function App() {
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full md:w-96 bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-red-600 transition"
                     />
-                    <div className="flex gap-3 w-full md:w-auto">
-                      <select className="bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-xs text-white font-bold">
-                        <option>Aprovados</option>
-                        <option>Pendentes</option>
-                      </select>
-                      <select className="bg-neutral-900 border border-neutral-800 px-4 py-2.5 rounded-xl text-xs text-white font-bold">
-                        <option>Todos os Cargos</option>
-                      </select>
-                    </div>
                   </div>
 
-                  {/* TABELA DE MEMBROS */}
                   <div className="bg-[#181b20] border border-neutral-800/80 rounded-2xl overflow-hidden shadow-2xl">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -431,7 +413,6 @@ export default function App() {
                 </>
               )}
 
-              {/* VISTA 2: FREQUÊNCIAS RÁDIO */}
               {currentView === 'radios' && (
                 <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
                   <h2 className="text-xl font-bold text-white">📻 Frequências de Comunicação da Gang</h2>
@@ -449,7 +430,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* VISTA 3: PEDIR UPGRADE / PROMOÇÃO */}
               {currentView === 'upgrade' && (
                 <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6 max-w-2xl mx-auto">
                   <h2 className="text-xl font-bold text-white">⭐ Pedido de Promoção / Cargo</h2>
@@ -473,7 +453,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* VISTA 4: PAINEL ADMIN & SUPORTE */}
               {currentView === 'admin' && (
                 <div className="bg-[#181b20] border border-neutral-800 p-8 rounded-3xl space-y-6">
                   <h2 className="text-xl font-bold text-amber-500">⚙️ Log de Auditoria & Painel da Staff</h2>
@@ -491,7 +470,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* VISTA 5: MEU PERFIL & DISCORD */}
               {currentView === 'perfil' && (
                 <div className="max-w-2xl mx-auto bg-[#181b20] border border-neutral-800 p-8 rounded-3xl shadow-xl space-y-6">
                   <div className="flex items-center gap-6">
@@ -527,7 +505,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* OUTRAS VISTAS */}
               {!['gestao', 'radios', 'upgrade', 'admin', 'perfil'].includes(currentView) && (
                 <div className="bg-[#181b20] border border-neutral-800 p-12 rounded-3xl text-center shadow-xl">
                   <h2 className="text-2xl font-black mb-2 text-white uppercase tracking-wider">Secção: {currentView}</h2>
