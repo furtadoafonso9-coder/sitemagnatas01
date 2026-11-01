@@ -5,8 +5,12 @@ import {
   collection, 
   onSnapshot, 
   doc, 
-  setDoc 
+  setDoc,
+  updateDoc 
 } from 'firebase/firestore';
+import { 
+  getAuth 
+} from 'firebase/auth';
 
 // ==========================================
 // CONFIGURAÇÃO REAL DO FIREBASE (MAGNATAS 01)
@@ -23,6 +27,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+// ==========================================
+// CONFIGURAÇÃO OAUTH2 DISCORD (DIRETA E OFICIAL)
+// ==========================================
+const DISCORD_CLIENT_ID = "1544523627846025296"; 
+const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app/";
+const DISCORD_AUTH_URL = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -32,6 +44,8 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [usersList, setUsersList] = useState([]);
   const [stats, setStats] = useState({ ativos: 12, pendentes: 0, warnings: 0, staff: 1 });
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   const [candidaturas, setCandidaturas] = useState([
     { id: '1', nome: 'shadow_01', idInGame: '19283', idade: '19 anos', motivo: 'Quero entrar na gang para ajudar nos assaltos e portagem.', estado: 'pendente' },
@@ -48,11 +62,50 @@ export default function App() {
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
   ]);
 
-  // Verificar se já existe sessão guardada
+  // Captura do Token do Discord na URL após o Redirecionamento OAuth2
   useEffect(() => {
-    const saved = localStorage.getItem('magnatas_discord_user');
-    if (saved) {
-      setUser(JSON.parse(saved));
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      const fragment = new URLSearchParams(hash.slice(1));
+      const accessToken = fragment.get('access_token');
+
+      if (accessToken) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        fetch('https://discord.com/api/users/@me', {
+          headers: { authorization: `Bearer ${accessToken}` }
+        })
+        .then(res => res.json())
+        .then(async (discordUser) => {
+          if (discordUser.id) {
+            const profile = {
+              id: discordUser.id,
+              username: discordUser.username,
+              avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : "https://cdn.discordapp.com/embed/avatars/0.png",
+              discordTag: `@${discordUser.username}`
+            };
+            setUser(profile);
+            localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
+
+            const userRef = doc(db, 'users', discordUser.id);
+            const initialData = {
+              discordId: discordUser.id,
+              username: discordUser.username,
+              discordTag: profile.discordTag,
+              avatar: profile.avatar,
+              idInGame: Math.floor(2000 + Math.random() * 25000),
+              age: '18 anos',
+              estado: 'aprovado',
+              roles: ['01 Member´s'],
+              lastLogin: new Date().toISOString()
+            };
+            await setDoc(userRef, initialData, { merge: true });
+          }
+        })
+        .catch(err => console.error("Erro ao obter perfil Discord:", err));
+      }
+    } else {
+      const saved = localStorage.getItem('magnatas_discord_user');
+      if (saved) setUser(JSON.parse(saved));
     }
   }, []);
 
@@ -81,38 +134,8 @@ export default function App() {
     return () => unsubscribeUsersCollection();
   }, [candidaturas.length]);
 
-  // Login Seguro e Direto (Simula autorização do Discord sem erros de API externa)
-  const handleDiscordLogin = async () => {
-    const discordName = prompt("Insere o teu nome/tag do Discord para entrar no painel (Ex: Reys_01):");
-    if (!discordName) return;
-
-    const profile = {
-      id: Math.floor(100000 + Math.random() * 900000).toString(),
-      username: discordName,
-      avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
-      discordTag: `@${discordName.toLowerCase()}`
-    };
-
-    setUser(profile);
-    localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
-
-    // Grava no Firestore do Magnatas 01
-    try {
-      const userRef = doc(db, 'users', profile.id);
-      await setDoc(userRef, {
-        discordId: profile.id,
-        username: profile.username,
-        discordTag: profile.discordTag,
-        avatar: profile.avatar,
-        idInGame: Math.floor(2000 + Math.random() * 25000),
-        age: '18 anos',
-        estado: 'aprovado',
-        roles: ['01 Member´s'],
-        lastLogin: new Date().toISOString()
-      }, { merge: true });
-    } catch (e) {
-      console.error("Erro ao gravar no Firestore:", e);
-    }
+  const handleDiscordLogin = () => {
+    window.location.href = DISCORD_AUTH_URL;
   };
 
   const handleLogout = () => {
@@ -128,6 +151,22 @@ export default function App() {
   const handleRejeitarCandidatura = (id) => {
     setCandidaturas(prev => prev.filter(c => c.id !== id));
     alert('Candidatura rejeitada.');
+  };
+
+  const handleForceSync = async () => {
+    if (!user) return;
+    setSyncLoading(true);
+    setSyncMessage('A comunicar com o Bot do Discord...');
+    try {
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, { lastSyncRequest: new Date().toISOString() });
+      setSyncMessage('✅ Cargos sincronizados com sucesso!');
+    } catch (error) {
+      setSyncMessage('❌ Erro de sincronização.');
+    } finally {
+      setSyncLoading(false);
+      setTimeout(() => setSyncMessage(''), 4000);
+    }
   };
 
   const filteredMembers = usersList.filter(m => 
@@ -502,6 +541,20 @@ export default function App() {
                         ID Discord: {user.id}
                       </span>
                     </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-neutral-800">
+                    <h3 className="text-sm font-bold text-white mb-3">Sincronização com o Bot</h3>
+                    <button 
+                      onClick={handleForceSync}
+                      disabled={syncLoading}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs uppercase shadow-lg shadow-red-600/20 transition"
+                    >
+                      {syncLoading ? 'A processar...' : '🔄 Forçar Sincronização de Cargos'}
+                    </button>
+                    {syncMessage && (
+                      <p className="text-xs text-center mt-3 text-emerald-400 font-bold">{syncMessage}</p>
+                    )}
                   </div>
                 </div>
               )}
