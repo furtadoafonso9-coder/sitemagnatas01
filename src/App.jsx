@@ -11,7 +11,8 @@ import {
 
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
-const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds`;
+// Revertido para incluir o scope de email
+const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -41,6 +42,7 @@ export default function App() {
             const profile = {
               id: discordUser.id,
               username: discordUser.username,
+              email: discordUser.email || '', // Captura o email do Discord
               avatar: discordUser.avatar 
                 ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` 
                 : "https://cdn.discordapp.com/embed/avatars/0.png",
@@ -59,6 +61,7 @@ export default function App() {
               await setDoc(userRef, {
                 discordId: discordUser.id,
                 username: discordUser.username,
+                email: discordUser.email || '',
                 discordTag: profile.discordTag,
                 avatar: profile.avatar,
                 estado: 'pendente_candidatura',
@@ -119,6 +122,7 @@ export default function App() {
     await updateDoc(userRef, {
       discordId: user.id,
       username: user.username,
+      email: user.email || '',
       idInGame: formCandidatura.idInGame,
       idade: formCandidatura.idade || 'Não informada',
       motivo: formCandidatura.motivo,
@@ -262,7 +266,7 @@ export default function App() {
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <div className="text-center space-y-2">
                 <h2 className="text-xl font-black text-white">Formulário de Candidatura</h2>
-                <p className="text-xs text-neutral-400">Conta vinculada: <strong className="text-indigo-400">{user.username}</strong> ({user.id})</p>
+                <p className="text-xs text-neutral-400">Conta vinculada: <strong className="text-indigo-400">{user.username}</strong> ({user.email || user.id})</p>
               </div>
 
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
