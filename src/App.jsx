@@ -18,8 +18,10 @@ export default function App() {
   const [userStatus, setUserStatus] = useState('pendente_candidatura'); 
   const [currentView, setCurrentView] = useState('gestao');
   const [usersList, setUsersList] = useState([]);
+  
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
+  // 1. Processa Token do Discord e guarda os dados (ID + Username)
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -49,6 +51,7 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
+            // Garante o registo do ID do Discord no Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -56,8 +59,8 @@ export default function App() {
               setUserStatus(docSnap.data().estado || 'pendente_candidatura');
             } else {
               await setDoc(userRef, {
-                discordId: discordUser.id,
-                username: discordUser.username,
+                discordId: discordUser.id,        // 🆔 Usado pelo BOT
+                username: discordUser.username,    // 👤 Nome do Discord
                 discordTag: profile.discordTag,
                 avatar: profile.avatar,
                 estado: 'pendente_candidatura',
@@ -84,6 +87,7 @@ export default function App() {
     }
   }, []);
 
+  // 2. Escuta membros em tempo real no Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -107,19 +111,23 @@ export default function App() {
     window.location.href = window.location.pathname;
   };
 
+  // Submete a candidatura associando ao ID do Discord do utilizador
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     if (!formCandidatura.idInGame || !formCandidatura.motivo) {
-      alert('Preenche todos os campos obrigatórios!');
+      alert('Preenche os campos obrigatórios!');
       return;
     }
 
     const userRef = doc(db, 'users', user.id);
     await updateDoc(userRef, {
+      discordId: user.id,             // 🆔 Re-confirma o ID para o Bot
+      username: user.username,         // 👤 Re-confirma o Username
       idInGame: formCandidatura.idInGame,
-      idade: formCandidatura.idade || '18 anos',
+      idade: formCandidatura.idade || 'Não informada',
       motivo: formCandidatura.motivo,
-      estado: 'pendente_analise'
+      estado: 'pendente_analise',
+      dataSubmissao: new Date().toISOString()
     });
 
     setUserStatus('pendente_analise');
@@ -128,7 +136,7 @@ export default function App() {
 
   const handleAprovar = async (discordId) => {
     await updateDoc(doc(db, 'users', discordId), { estado: 'aprovado' });
-    alert('Membro aprovado com sucesso!');
+    alert('Membro aprovado! O Bot já pode atualizar o cargo.');
   };
 
   const handleRejeitar = async (discordId) => {
@@ -151,6 +159,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
+      
+      {/* 🛡️ SIDEBAR SÓ PARA APROVADOS */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -185,25 +195,28 @@ export default function App() {
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
           {!user ? (
+            /* 1. LOGIN DISCORD */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
               <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">🔑</div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
-              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema e submeter a tua candidatura aos Magnatas 01.</p>
+              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para vincular a tua conta e preencher a candidatura.</p>
               <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl transition">
                 VINCULAR DISCORD (OAUTH2)
               </button>
             </div>
           ) : userStatus === 'pendente_analise' ? (
+            /* 2. CANDIDATURA EM ANÁLISE */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">⏳</div>
               <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
-              <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
+              <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda a validação da liderança para dar acesso ao painel e cargos no Discord!</p>
             </div>
           ) : userStatus === 'rejeitado' ? (
+            /* 3. REJEITADO (TENTAR NOVAMENTE) */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-red-600/10 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">❌</div>
               <h2 className="text-xl font-black text-white">Candidatura Rejeitada</h2>
-              <p className="text-xs text-neutral-400">Infelizmente a tua candidatura não foi aprovada. Podes refazer e submeter novamente.</p>
+              <p className="text-xs text-neutral-400">Infelizmente a tua candidatura não foi aprovada. Podes refazer o formulário.</p>
               <button 
                 onClick={handleTentarNovamente}
                 className="mt-4 bg-red-600 hover:bg-red-700 text-white font-extrabold px-6 py-3 rounded-xl text-xs uppercase transition shadow-lg"
@@ -212,13 +225,15 @@ export default function App() {
               </button>
             </div>
           ) : userStatus === 'aprovado' ? (
+            /* 4. PAINEL DE MEMBROS APROVADOS */
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
               <div className="bg-[#181b20] border border-neutral-800 rounded-2xl overflow-hidden p-6">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-neutral-800 text-neutral-400">
-                      <th className="p-3">Membro</th>
+                      <th className="p-3">Membro (Discord)</th>
+                      <th className="p-3">Discord ID</th>
                       <th className="p-3">ID In-Game</th>
                       <th className="p-3">Estado / Ações</th>
                     </tr>
@@ -226,7 +241,8 @@ export default function App() {
                   <tbody className="divide-y divide-neutral-800">
                     {usersList.map((m) => (
                       <tr key={m.id}>
-                        <td className="p-3 font-bold text-white">{m.username}</td>
+                        <td className="p-3 font-bold text-white">{m.username || m.discordTag}</td>
+                        <td className="p-3 text-neutral-400 font-mono text-[11px]">{m.discordId || m.id}</td>
                         <td className="p-3 text-indigo-400">ID: {m.idInGame || 'Pendente'}</td>
                         <td className="p-3 flex items-center gap-2">
                           <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
@@ -253,17 +269,31 @@ export default function App() {
               </div>
             </div>
           ) : (
+            /* 5. FORMULÁRIO COM DADOS DO DISCORD PRÉ-PREENCHIDOS */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
-              <h2 className="text-xl font-black text-white text-center">Formulário de Candidatura</h2>
+              <div className="text-center space-y-2">
+                <h2 className="text-xl font-black text-white">Formulário de Candidatura</h2>
+                <p className="text-xs text-neutral-400">Conta vinculada: <strong className="text-indigo-400">{user.username}</strong> ({user.id})</p>
+              </div>
+
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">ID In-Game</label>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">ID Discord (Automático)</label>
+                  <input 
+                    type="text"
+                    value={user.id}
+                    disabled
+                    className="w-full bg-neutral-900/50 border border-neutral-800 p-3 rounded-xl text-xs text-neutral-500 font-mono cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-400 font-bold block mb-1.5">ID In-Game (Obrigatório)</label>
                   <input 
                     type="number"
                     placeholder="Ex: 27356"
                     value={formCandidatura.idInGame}
                     onChange={(e) => setFormCandidatura({...formCandidatura, idInGame: e.target.value})}
-                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-600"
                     required
                   />
                 </div>
@@ -274,16 +304,16 @@ export default function App() {
                     placeholder="Ex: 19 anos"
                     value={formCandidatura.idade}
                     onChange={(e) => setFormCandidatura({...formCandidatura, idade: e.target.value})}
-                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-600"
                   />
                 </div>
                 <div>
                   <label className="text-xs text-neutral-400 font-bold block mb-1.5">Motivo de Entrada</label>
                   <textarea 
-                    placeholder="Explica a tua motivação..."
+                    placeholder="Explica a tua motivação para entrar na gang..."
                     value={formCandidatura.motivo}
                     onChange={(e) => setFormCandidatura({...formCandidatura, motivo: e.target.value})}
-                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28"
+                    className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-28 focus:outline-none focus:border-red-600"
                     required
                   ></textarea>
                 </div>
