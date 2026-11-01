@@ -14,36 +14,12 @@ import {
 } from 'firebase/firestore';
 
 const ALL_ROLES = [
-  { name: "Staff ATHOS PvP", category: "staff" },
-  { name: "01 Founder´s", category: "staff", founder: true, admin: true },
-  { name: "01 Leader´s", category: "staff", leader: true, admin: true },
-  { name: "Magnata 01! ©", category: "staff", admin: true },
-  { name: "Resp. Manager´s", category: "staff", manager: true, admin: true },
-  { name: "01 Manager´s", category: "staff", manager: true, admin: true },
-  { name: "Suport", category: "staff", support: true },
-  { name: "Manager´s Approval", category: "staff", support: true },
-  { name: "Resp. Member´s", category: "staff", support: true },
-  
-  { name: "01 Member´s", category: "membros" },
-  { name: "Server Booster´s", category: "membros" },
-  { name: "01 Friend´s", category: "membros" },
-  { name: "01 Visitant", category: "membros" },
-  { name: "PVP Player", category: "membros" },
-  { name: "Homem", category: "membros" },
-  { name: "Mulher", category: "membros" },
-
-  { name: "Ban Temporário", category: "punicoes" },
-  { name: "Ban Perma", category: "punicoes" },
-  { name: "Muted", category: "punicoes" },
-  { name: "Ausente", category: "punicoes" },
-  { name: "Warning 1", category: "punicoes" },
-  { name: "Warning 2", category: "punicoes" },
-  { name: "Warning AFK", category: "punicoes" },
-
-  { name: "Streamer", category: "outros" },
-  { name: "Conta ALT", category: "outros" },
-  { name: "Autorização P/ Calças", category: "outros" },
-  { name: "Autorização P/ Manga", category: "outros" }
+  "Staff ATHOS PvP", "01 Founder´s", "01 Leader´s", "Magnata 01! ©", 
+  "Resp. Manager´s", "01 Manager´s", "Suport", "Manager´s Approval", 
+  "Resp. Member´s", "01 Member´s", "Server Booster´s", "01 Friend´s", 
+  "01 Visitant", "PVP Player", "Homem", "Mulher", "Ban Temporário", 
+  "Ban Perma", "Muted", "Ausente", "Warning 1", "Warning 2", 
+  "Warning AFK", "Streamer", "Conta ALT", "Autorização P/ Calças", "Autorização P/ Manga"
 ];
 
 export default function App() {
@@ -51,30 +27,20 @@ export default function App() {
   const [userDoc, setUserDoc] = useState(null);
   const [currentView, setCurrentView] = useState('base');
   
-  const [isRegistering, setIsRegistering] = useState(true);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
 
   const [usersList, setUsersList] = useState([]);
   const [roupas, setRoupas] = useState([]);
-  const [radios, setRadios] = useState({ principal: {}, alternativa: {} });
   const [regras, setRegras] = useState([]);
-  const [auditLogs, setAuditLogs] = useState([]);
-
-  const [formCandidatura, setFormCandidatura] = useState({
-    idade: '',
-    nomeInGame: '',
-    idInGame: '',
-    killsAtual: '',
-    tempoCidade: '',
-    motivo: ''
-  });
-
+  const [radios, setRadios] = useState({ principal: { frequencia: '100.0', info: 'Rádio Principal' }, alternativa: { frequencia: '105.5', info: 'Rádio Secundária' } });
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
   const [formRoupa, setFormRoupa] = useState({ nome: '', numero: '', imagem: '' });
   const [formRegra, setFormRegra] = useState({ categoria: 'Gerais', titulo: '', descricao: '', ordem: 1 });
-  const [editingRadio, setEditingRadio] = useState({ tipo: 'principal', freq: '', info: '' });
-  const [selectedUserForRoles, setSelectedUserForRoles] = useState(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('magnatas_email_user');
@@ -93,12 +59,8 @@ export default function App() {
     try {
       const userRef = doc(db, 'users', uid);
       const docSnap = await getDoc(userRef);
-      if (docSnap.exists()) {
-        setUserDoc(docSnap.data());
-      }
-    } catch (err) {
-      console.error("Erro ao buscar doc:", err);
-    }
+      if (docSnap.exists()) setUserDoc(docSnap.data());
+    } catch (err) { console.error(err); }
   };
 
   useEffect(() => {
@@ -107,25 +69,19 @@ export default function App() {
     const unsubUser = onSnapshot(doc(db, 'users', user.uid), (snap) => {
       if (snap.exists()) setUserDoc(snap.data());
     });
-
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       let list = [];
       snap.forEach(d => list.push({ id: d.id, ...d.data() }));
       setUsersList(list);
     });
-
     const unsubRoupas = onSnapshot(collection(db, 'roupas'), (snap) => {
       let r = [];
       snap.forEach(d => r.push({ id: d.id, ...d.data() }));
       setRoupas(r);
     });
-
     const unsubRadios = onSnapshot(collection(db, 'config'), (snap) => {
-      snap.forEach(d => {
-        if (d.id === 'radios') setRadios(d.data());
-      });
+      snap.forEach(d => { if (d.id === 'radios') setRadios(d.data()); });
     });
-
     const qRegras = query(collection(db, 'regras'), orderBy('ordem', 'asc'));
     const unsubRegras = onSnapshot(qRegras, (snap) => {
       let reg = [];
@@ -133,142 +89,70 @@ export default function App() {
       setRegras(reg);
     });
 
-    const qLogs = query(collection(db, 'logs'), orderBy('timestamp', 'desc'));
-    const unsubLogs = onSnapshot(qLogs, (snap) => {
-      let l = [];
-      snap.forEach(d => l.push({ id: d.id, ...d.data() }));
-      setAuditLogs(l);
-    });
-
     return () => {
-      unsubUser();
-      unsubUsers();
-      unsubRoupas();
-      unsubRadios();
-      unsubRegras();
-      unsubLogs();
+      unsubUser(); unsubUsers(); unsubRoupas(); unsubRadios(); unsubRegras();
     };
   }, [user]);
 
   const handleEmailAuth = async (e) => {
     e.preventDefault();
-    if (!emailInput || !passwordInput) {
-      alert("Preenche o e-mail e a palavra-passe!");
-      return;
-    }
+    if (!emailInput || !passwordInput) return alert("Preenche os campos!");
 
     try {
-      const cleanEmailId = emailInput.trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
-      const userRef = doc(db, 'users', cleanEmailId);
+      const cleanId = emailInput.trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+      const userRef = doc(db, 'users', cleanId);
       const docSnap = await getDoc(userRef);
 
       if (isRegistering) {
-        if (!usernameInput) {
-          alert("Indica um nome de utilizador!");
-          return;
-        }
-
+        if (!usernameInput) return alert("Indica o nome de utilizador!");
         const newUser = {
-          uid: cleanEmailId,
+          uid: cleanId,
           username: usernameInput.trim(),
           email: emailInput.trim(),
-          password: passwordInput, // Armazenado para validação simples
+          password: passwordInput,
           avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
           estado: 'pendente_candidatura',
-          roles: ['01 Visitant'],
-          createdAt: new Date().toISOString()
+          roles: ['01 Visitant']
         };
-
         await setDoc(userRef, newUser);
-        setUser(newUser);
-        setUserDoc(newUser);
+        setUser(newUser); setUserDoc(newUser);
         localStorage.setItem('magnatas_email_user', JSON.stringify(newUser));
-        alert("Conta criada com sucesso!");
       } else {
-        if (!docSnap.exists()) {
-          alert("Conta não encontrada. Regista-te primeiro!");
-          return;
-        }
-        const userData = docSnap.data();
-        if (userData.password && userData.password !== passwordInput) {
-          alert("Palavra-passe incorreta!");
-          return;
-        }
-        setUser(userData);
-        setUserDoc(userData);
-        localStorage.setItem('magnatas_email_user', JSON.stringify(userData));
+        if (!docSnap.exists()) return alert("Conta não encontrada!");
+        const data = docSnap.data();
+        if (data.password && data.password !== passwordInput) return alert("Palavra-passe incorreta!");
+        setUser(data); setUserDoc(data);
+        localStorage.setItem('magnatas_email_user', JSON.stringify(data));
       }
-    } catch (error) {
-      console.error("Erro na autenticação:", error);
-      alert("Erro ao ligar à Base de Dados: " + error.message);
-    }
+    } catch (err) { alert("Erro: " + err.message); }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('magnatas_email_user');
-    setUser(null);
-    setUserDoc(null);
-  };
-
-  const addAuditLog = async (acao, detalhe) => {
-    try {
-      await addDoc(collection(db, 'logs'), {
-        autorId: user.uid,
-        autorName: user.username,
-        acao,
-        detalhe,
-        timestamp: new Date().toISOString()
-      });
-    } catch(e) { console.error(e); }
+    setUser(null); setUserDoc(null);
   };
 
   const userRoles = userDoc?.roles || [];
   const isFounder = userRoles.includes("01 Founder´s");
-  const isLeader = isFounder || userRoles.includes("01 Leader´s");
-  const isManager = isLeader || userRoles.includes("01 Manager´s") || userRoles.includes("Resp. Manager´s");
-  const isSupport = isManager || userRoles.includes("Suport") || userRoles.includes("Manager´s Approval");
+  const isSupport = isFounder || userRoles.includes("Suport") || userRoles.includes("01 Leader´s");
 
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
-    if (!formCandidatura.nomeInGame || !formCandidatura.idInGame || !formCandidatura.motivo) {
-      alert("Preenche os campos obrigatórios!");
-      return;
-    }
-
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        ...formCandidatura,
-        estado: 'pendente_analise',
-        dataCandidatura: new Date().toISOString()
-      });
-      alert("Candidatura submetida com sucesso!");
-    } catch (err) {
-      alert("Erro ao submeter: " + err.message);
-    }
-  };
-
-  const handleAprovarCandidatura = async (targetUser) => {
-    const userRef = doc(db, 'users', targetUser.id);
-    const updatedRoles = Array.from(new Set([...(targetUser.roles || []), "01 Member´s"]));
-    await updateDoc(userRef, { estado: 'aprovado', roles: updatedRoles });
-    await addAuditLog("Aprovação de Candidatura", `Aprovou ${targetUser.username}`);
-  };
-
-  const handleReprovarCandidatura = async (targetUser) => {
-    const userRef = doc(db, 'users', targetUser.id);
-    await updateDoc(userRef, { estado: 'rejeitado' });
-    await addAuditLog("Reprovação de Candidatura", `Reprovou ${targetUser.username}`);
-  };
-
-  const handleTentarNovamente = async () => {
     const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { estado: 'pendente_candidatura', nomeInGame: '', idInGame: '', motivo: '' });
+    await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
+    alert("Candidatura submetida!");
   };
 
-  // -------------------------------------------------------------
-  // ECRÃ DE LOGIN / REGISTO
-  // -------------------------------------------------------------
+  const handleToggleRole = async (targetId, roleName) => {
+    if (!isSupport) return alert("Sem permissões.");
+    const target = usersList.find(u => u.id === targetId);
+    if (!target) return;
+    let roles = target.roles || [];
+    let updated = roles.includes(roleName) ? roles.filter(r => r !== roleName) : [...roles, roleName];
+    await updateDoc(doc(db, 'users', targetId), { roles: updated });
+  };
+
+  // Ecrã de Login/Registo
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0d0f12] text-gray-100 flex flex-col justify-center items-center p-6 font-sans">
@@ -276,58 +160,21 @@ export default function App() {
           <div className="text-center space-y-2">
             <div className="w-16 h-16 bg-red-600/10 border border-red-600/30 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black">🛡️</div>
             <h1 className="text-2xl font-black text-white">MAGNATAS 01!</h1>
-            <p className="text-xs text-red-500 uppercase font-bold">Portal de Acesso por E-mail</p>
+            <p className="text-xs text-red-500 uppercase font-bold">Portal de Acesso Oficial</p>
           </div>
-
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {isRegistering && (
-              <div>
-                <label className="text-xs text-neutral-400 font-bold block mb-1">Nome de Utilizador</label>
-                <input 
-                  type="text" 
-                  placeholder="Teu nome" 
-                  value={usernameInput} 
-                  onChange={e => setUsernameInput(e.target.value)} 
-                  className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
-                  required 
-                />
-              </div>
+              <input type="text" placeholder="Nome de Utilizador" value={usernameInput} onChange={e => setUsernameInput(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
             )}
-            <div>
-              <label className="text-xs text-neutral-400 font-bold block mb-1">E-mail</label>
-              <input 
-                type="email" 
-                placeholder="exemplo@dominio.com" 
-                value={emailInput} 
-                onChange={e => setEmailInput(e.target.value)} 
-                className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
-                required 
-              />
-            </div>
-            <div>
-              <label className="text-xs text-neutral-400 font-bold block mb-1">Palavra-passe</label>
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                value={passwordInput} 
-                onChange={e => setPasswordInput(e.target.value)} 
-                className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white"
-                required 
-              />
-            </div>
-
-            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">
+            <input type="email" placeholder="E-mail" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+            <input type="password" placeholder="Palavra-passe" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3 rounded-xl text-xs uppercase shadow-lg transition">
               {isRegistering ? 'Criar Conta' : 'Iniciar Sessão'}
             </button>
           </form>
-
           <div className="text-center">
-            <button 
-              type="button"
-              onClick={() => setIsRegistering(!isRegistering)} 
-              className="text-xs text-neutral-400 hover:text-red-500 font-semibold cursor-pointer"
-            >
-              {isRegistering ? 'Já tens conta? Iniciar Sessão' : 'Não tens conta? Criar Registo'}
+            <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-xs text-neutral-400 hover:text-red-500 font-semibold">
+              {isRegistering ? 'Já tens conta? Iniciar Sessão' : 'Criar nova conta'}
             </button>
           </div>
         </div>
@@ -335,7 +182,6 @@ export default function App() {
     );
   }
 
-  // Candidatura
   if (userDoc?.estado === 'pendente_candidatura') {
     return (
       <div className="min-h-screen bg-[#0d0f12] text-gray-100 p-6 flex items-center justify-center">
@@ -362,7 +208,6 @@ export default function App() {
     );
   }
 
-  // Pendente Análise
   if (userDoc?.estado === 'pendente_analise') {
     return (
       <div className="min-h-screen bg-[#0d0f12] text-gray-100 flex flex-col items-center justify-center p-6">
@@ -376,36 +221,21 @@ export default function App() {
     );
   }
 
-  // Rejeitado
-  if (userDoc?.estado === 'rejeitado') {
-    return (
-      <div className="min-h-screen bg-[#0d0f12] text-gray-100 flex flex-col items-center justify-center p-6">
-        <div className="max-w-md w-full bg-[#15181e] border border-neutral-800 rounded-3xl p-8 text-center space-y-6">
-          <div className="text-3xl">❌</div>
-          <h1 className="text-2xl font-black text-white">Candidatura Reprovada</h1>
-          <button onClick={handleTentarNovamente} className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Tentar Novamente</button>
-        </div>
-      </div>
-    );
-  }
-
-  // -------------------------------------------------------------
-  // DASHBOARD PRINCIPAL
-  // -------------------------------------------------------------
+  // Dashboard Completo e Estilizado
   return (
     <div className="min-h-screen bg-[#0d0f12] text-gray-200 font-sans flex">
+      {/* Sidebar */}
       <aside className="w-64 bg-[#15181e] border-r border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
         <div>
-          <div className="p-6 border-b border-neutral-800">
-            <h2 className="text-base font-black text-red-500">MAGNATAS 01!</h2>
+          <div className="p-6 border-b border-neutral-800 flex items-center gap-3">
+            <span className="text-red-500 font-black text-lg">🛡️ MAGNATAS 01!</span>
           </div>
-          <nav className="p-4 space-y-1">
-            <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold ${currentView === 'base' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>🏰 Base da Gang</button>
-            <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>🎖️ Cargos</button>
-            <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>👕 Roupas</button>
-            <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold ${currentView === 'radio' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>📻 Rádio</button>
-            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold ${currentView === 'regras' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>📜 Regras</button>
-            {isSupport && <button onClick={() => setCurrentView('admin')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold ${currentView === 'admin' ? 'bg-amber-500/10 text-amber-400' : 'text-amber-500/70'}`}>⚙️ Admin</button>}
+          <nav className="p-4 space-y-1 text-xs font-bold">
+            <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${currentView === 'base' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>🏰 Gestão de Membros</button>
+            <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>🎖️ Lista de Cargos</button>
+            <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>👕 Roupas & Kits</button>
+            <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${currentView === 'radio' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>📻 Frequências Rádio</button>
+            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${currentView === 'regras' ? 'bg-red-600/10 text-red-500' : 'text-neutral-400'}`}>📜 Regras Oficiais</button>
           </nav>
         </div>
         <div className="p-4 border-t border-neutral-800 flex justify-between items-center">
@@ -416,28 +246,120 @@ export default function App() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-neutral-800 bg-[#15181e] px-8 flex justify-between items-center sticky top-0 z-10">
-          <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">MAGNATAS 01! &bull; {currentView.toUpperCase()}</span>
+          <span className="font-extrabold text-xs uppercase tracking-wider text-red-500">PAINEL OFICIAL &bull; {currentView.toUpperCase()}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {userRoles.slice(0, 4).map(r => (
+              <span key={r} className="px-2 py-1 bg-neutral-900 border border-neutral-800 text-[10px] rounded-lg text-red-400 font-bold">{r}</span>
+            ))}
+          </div>
         </header>
 
         <main className="p-8 flex-1 overflow-y-auto space-y-6">
           {currentView === 'base' && (
             <div className="space-y-6">
-              <h1 className="text-2xl font-black text-white">Membros Aprovados</h1>
-              <div className="bg-[#15181e] border border-neutral-800 rounded-2xl overflow-hidden p-6">
-                <table className="w-full text-left text-xs">
+              {/* Cartões Estatísticos */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-[#15181e] border border-neutral-800 p-4 rounded-2xl flex items-center gap-4">
+                  <div className="p-3 bg-red-600/10 text-red-500 rounded-xl">👥</div>
+                  <div>
+                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Membros Ativos</p>
+                    <h3 className="text-xl font-black text-white">{usersList.filter(u => u.estado === 'aprovado').length}</h3>
+                  </div>
+                </div>
+                <div className="bg-[#15181e] border border-neutral-800 p-4 rounded-2xl flex items-center gap-4">
+                  <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl">⏳</div>
+                  <div>
+                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Pendentes</p>
+                    <h3 className="text-xl font-black text-white">{usersList.filter(u => u.estado === 'pendente_analise').length}</h3>
+                  </div>
+                </div>
+                <div className="bg-[#15181e] border border-neutral-800 p-4 rounded-2xl flex items-center gap-4">
+                  <div className="p-3 bg-red-500/10 text-red-400 rounded-xl">⚠️</div>
+                  <div>
+                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Total Registados</p>
+                    <h3 className="text-xl font-black text-white">{usersList.length}</h3>
+                  </div>
+                </div>
+                <div className="bg-[#15181e] border border-neutral-800 p-4 rounded-2xl flex items-center gap-4">
+                  <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl">👑</div>
+                  <div>
+                    <p className="text-[10px] text-neutral-400 font-bold uppercase">Staff / Founders</p>
+                    <h3 className="text-xl font-black text-white">{usersList.filter(u => (u.roles || []).some(r => r.includes('Founder') || r.includes('Leader'))).length}</h3>
+                  </div>
+                </div>
+              </div>
+
+              {/* Barra de Pesquisa */}
+              <div className="flex gap-4">
+                <input 
+                  type="text" 
+                  placeholder="Pesquisar por Nome In-Game, ID ou E-mail..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="flex-1 bg-[#15181e] border border-neutral-800 p-3 rounded-2xl text-xs text-white focus:outline-none focus:border-red-600"
+                />
+              </div>
+
+              {/* Tabela de Membros */}
+              <div className="bg-[#15181e] border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
+                <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-neutral-800 text-neutral-400">
-                      <th className="p-3">Utilizador</th>
-                      <th className="p-3">In-Game</th>
-                      <th className="p-3">ID</th>
+                    <tr className="border-b border-neutral-800 text-neutral-400 bg-neutral-900/40">
+                      <th className="p-4">Membro</th>
+                      <th className="p-4">ID / Idade</th>
+                      <th className="p-4">Estado</th>
+                      <th className="p-4">Cargos Atribuídos</th>
+                      <th className="p-4 text-right">Gestão de Cargos</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-800">
-                    {usersList.filter(u => u.estado === 'aprovado').map(m => (
-                      <tr key={m.id}>
-                        <td className="p-3 font-bold text-white">{m.username}</td>
-                        <td className="p-3 text-red-400">{m.nomeInGame}</td>
-                        <td className="p-3 text-neutral-400">{m.idInGame}</td>
+                  <tbody className="divide-y divide-neutral-800/60">
+                    {usersList.filter(m => 
+                      (m.username || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                      (m.nomeInGame || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      String(m.idInGame || '').includes(searchQuery)
+                    ).map(m => (
+                      <tr key={m.id} className="hover:bg-neutral-900/20">
+                        <td className="p-4 flex items-center gap-3">
+                          <img src={m.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-8 h-8 rounded-full border border-neutral-700" />
+                          <div>
+                            <span className="font-bold text-white block">{m.nomeInGame || m.username}</span>
+                            <span className="text-[10px] text-neutral-500">{m.email}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-neutral-300">ID: <strong className="text-red-400">{m.idInGame || 'N/A'}</strong> | {m.idade || 'N/A'}</td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                            m.estado === 'aprovado' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' :
+                            m.estado === 'pendente_analise' ? 'bg-amber-950 text-amber-400 border border-amber-900' : 'bg-red-950 text-red-400 border border-red-900'
+                          }`}>
+                            {m.estado}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-wrap gap-1 max-w-xs">
+                            {(m.roles || ['01 Visitant']).map(r => (
+                              <span key={r} className="px-2 py-0.5 rounded bg-neutral-900 text-[10px] text-neutral-300 border border-neutral-800">{r}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          {isSupport && (
+                            <div className="flex justify-end gap-1 flex-wrap max-w-xs">
+                              {ALL_ROLES.slice(0, 5).map(role => {
+                                const has = (m.roles || []).includes(role);
+                                return (
+                                  <button 
+                                    key={role} 
+                                    onClick={() => handleToggleRole(m.id, role)}
+                                    className={`text-[9px] px-2 py-1 rounded border ${has ? 'bg-red-950 text-red-300 border-red-800' : 'bg-neutral-900 text-neutral-500 border-neutral-800'}`}
+                                  >
+                                    {has ? '✓ ' : '+ '}{role}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -446,31 +368,25 @@ export default function App() {
             </div>
           )}
 
-          {currentView === 'admin' && isSupport && (
-            <div className="space-y-6">
-              <h1 className="text-2xl font-black text-amber-500">Painel Administrativo</h1>
-              <div className="space-y-4">
-                <h3 className="text-xs font-black uppercase text-amber-400">Candidaturas Pendentes</h3>
-                {usersList.filter(u => u.estado === 'pendente_analise').map(c => (
-                  <div key={c.id} className="bg-[#15181e] border border-neutral-800 p-6 rounded-2xl flex justify-between items-center">
-                    <div>
-                      <h4 className="font-bold text-white">{c.username} - {c.nomeInGame} (ID: {c.idInGame})</h4>
-                      <p className="text-xs text-neutral-400 mt-1">{c.motivo}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleAprovarCandidatura(c)} className="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Aprovar</button>
-                      <button onClick={() => handleReprovarCandidatura(c)} className="bg-red-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold">Reprovar</button>
-                    </div>
+          {currentView === 'cargos' && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-black text-white">Estrutura de Cargos Oficiais</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {ALL_ROLES.map(role => (
+                  <div key={role} className="bg-[#15181e] border border-neutral-800 p-4 rounded-2xl flex justify-between items-center">
+                    <span className="text-xs font-bold text-white">{role}</span>
+                    <span className="text-[10px] bg-neutral-900 px-2 py-1 rounded text-neutral-400">
+                      {usersList.filter(u => (u.roles || []).includes(role)).length} membros
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {currentView === 'cargos' && <div className="text-white text-sm">Estrutura de Cargos ativa.</div>}
-          {currentView === 'roupas' && <div className="text-white text-sm">Catálogo de Roupas ativo.</div>}
-          {currentView === 'radio' && <div className="text-white text-sm">Frequências de Rádio ativas.</div>}
-          {currentView === 'regras' && <div className="text-white text-sm">Regras oficiais ativas.</div>}
+          {currentView === 'roupas' && <div className="text-white text-xs">Catálogo de Roupas e Kits ativo.</div>}
+          {currentView === 'radio' && <div className="text-white text-xs">Frequências de Rádio ativas.</div>}
+          {currentView === 'regras' && <div className="text-white text-xs">Regras oficiais ativas.</div>}
         </main>
       </div>
     </div>
