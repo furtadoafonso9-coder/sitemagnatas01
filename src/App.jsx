@@ -127,9 +127,22 @@ export default function App() {
     alert('Candidatura submetida com sucesso!');
   };
 
+  // Ações de Admin: Aprovar ou Rejeitar
   const handleAprovar = async (discordId) => {
     await updateDoc(doc(db, 'users', discordId), { estado: 'aprovado' });
     alert('Membro aprovado com sucesso!');
+  };
+
+  const handleRejeitar = async (discordId) => {
+    await updateDoc(doc(db, 'users', discordId), { estado: 'rejeitado' });
+    alert('Candidatura rejeitada.');
+  };
+
+  // Permitir tentar novamente (volta ao estado 'pendente_candidatura')
+  const handleTentarNovamente = async () => {
+    const userRef = doc(db, 'users', user.id);
+    await updateDoc(userRef, { estado: 'pendente_candidatura' });
+    setUserStatus('pendente_candidatura');
   };
 
   const isApproved = user && userStatus === 'aprovado';
@@ -186,6 +199,19 @@ export default function App() {
               <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
               <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
             </div>
+          ) : userStatus === 'rejeitado' ? (
+            /* ❌ ECRÃ DE REJEITADO COM OPÇÃO DE TENTAR NOVAMENTE */
+            <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
+              <div className="w-16 h-16 bg-red-600/10 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">❌</div>
+              <h2 className="text-xl font-black text-white">Candidatura Rejeitada</h2>
+              <p className="text-xs text-neutral-400">Infelizmente a tua candidatura não foi aprovada pela liderança neste momento.</p>
+              <button 
+                onClick={handleTentarNovamente}
+                className="mt-4 bg-red-600 hover:bg-red-700 text-white font-extrabold px-6 py-3 rounded-xl text-xs uppercase transition shadow-lg"
+              >
+                Tentar Novamente
+              </button>
+            </div>
           ) : userStatus === 'aprovado' ? (
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
@@ -203,13 +229,21 @@ export default function App() {
                       <tr key={m.id}>
                         <td className="p-3 font-bold text-white">{m.username}</td>
                         <td className="p-3 text-indigo-400">ID: {m.idInGame || 'Pendente'}</td>
-                        <td className="p-3">
-                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${m.estado === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'}`}>
+                        <td className="p-3 flex items-center gap-2">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+                            m.estado === 'aprovado' ? 'bg-emerald-950 text-emerald-400' : 
+                            m.estado === 'rejeitado' ? 'bg-red-950 text-red-400' : 'bg-amber-950 text-amber-400'
+                          }`}>
                             {m.estado}
                           </span>
                           {m.estado !== 'aprovado' && (
-                            <button onClick={() => handleAprovar(m.id)} className="ml-3 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg">
+                            <button onClick={() => handleAprovar(m.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg">
                               Aprovar
+                            </button>
+                          )}
+                          {m.estado !== 'rejeitado' && (
+                            <button onClick={() => handleRejeitar(m.id)} className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded-lg">
+                              Rejeitar
                             </button>
                           )}
                         </td>
@@ -220,7 +254,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* 📝 FORMULÁRIO DE CANDIDATURA SIMPLES DIRETO */
+            /* 📝 FORMULÁRIO DE CANDIDATURA SIMPLES */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <h2 className="text-xl font-black text-white text-center">Formulário de Candidatura</h2>
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
