@@ -29,6 +29,7 @@ export default function App() {
       const fragment = new URLSearchParams(hash.slice(1));
       const accessToken = fragment.get('access_token');
 
+      // Limpa imediatamente o token da barra de endereços
       window.history.replaceState({}, document.title, window.location.pathname);
 
       if (accessToken) {
@@ -127,7 +128,6 @@ export default function App() {
     alert('Candidatura submetida com sucesso!');
   };
 
-  // Ações de Admin: Aprovar ou Rejeitar
   const handleAprovar = async (discordId) => {
     await updateDoc(doc(db, 'users', discordId), { estado: 'aprovado' });
     alert('Membro aprovado com sucesso!');
@@ -138,7 +138,6 @@ export default function App() {
     alert('Candidatura rejeitada.');
   };
 
-  // Permitir tentar novamente (volta ao estado 'pendente_candidatura')
   const handleTentarNovamente = async () => {
     const userRef = doc(db, 'users', user.id);
     await updateDoc(userRef, { estado: 'pendente_candidatura' });
@@ -150,7 +149,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
       
-      {/* 🛡️ SIDEBAR SÓ APARECE PARA MEMBROS APROVADOS */}
+      {/* 🛡️ A SIDEBAR SÓ EXISTE SE ESTIVER APROVADO */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -200,7 +199,6 @@ export default function App() {
               <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
             </div>
           ) : userStatus === 'rejeitado' ? (
-            /* ❌ ECRÃ DE REJEITADO COM OPÇÃO DE TENTAR NOVAMENTE */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-red-600/10 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">❌</div>
               <h2 className="text-xl font-black text-white">Candidatura Rejeitada</h2>
@@ -254,7 +252,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* 📝 FORMULÁRIO DE CANDIDATURA SIMPLES */
+            /* 📝 FORMULÁRIO SIMPLES APARECE LOGO APÓS O LOGIN DO DISCORD */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <h2 className="text-xl font-black text-white text-center">Formulário de Candidatura</h2>
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
