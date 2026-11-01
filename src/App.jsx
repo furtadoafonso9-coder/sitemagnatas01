@@ -21,6 +21,7 @@ export default function App() {
   
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
+  // 1. Processa Token do Discord na URL e limpa a hash (#)
   useEffect(() => {
     const hash = window.location.hash;
     const savedUser = localStorage.getItem('magnatas_discord_user');
@@ -29,7 +30,7 @@ export default function App() {
       const fragment = new URLSearchParams(hash.slice(1));
       const accessToken = fragment.get('access_token');
 
-      // Limpa imediatamente o token da barra de endereços
+      // Limpa imediatamente a URL para evitar conflitos de rota
       window.history.replaceState({}, document.title, window.location.pathname);
 
       if (accessToken) {
@@ -86,6 +87,7 @@ export default function App() {
     }
   }, []);
 
+  // 2. Escuta a lista de utilizadores em tempo real do Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -149,7 +151,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#121418] text-gray-200 font-sans flex">
       
-      {/* 🛡️ A SIDEBAR SÓ EXISTE SE ESTIVER APROVADO */}
+      {/* 🛡️ SIDEBAR: RENDERIZADA EXCLUSIVAMENTE PARA APROVADOS */}
       {isApproved && (
         <aside className="w-64 border-r bg-[#181b20] border-neutral-800 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
           <div>
@@ -183,22 +185,25 @@ export default function App() {
         </header>
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
+          {/* ECRÃ 1: NÃO AUTENTICADO */}
           {!user ? (
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl">
               <div className="w-20 h-20 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black mb-6">🔑</div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
-              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema e submeter a tua candidatura.</p>
+              <p className="text-neutral-400 text-xs mb-8">Efetua login com o Discord para aceder ao sistema e submeter a tua candidatura aos Magnatas 01.</p>
               <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl transition">
                 VINCULAR DISCORD (OAUTH2)
               </button>
             </div>
           ) : userStatus === 'pendente_analise' ? (
+            /* ECRÃ 2: CANDIDATURA EM ANÁLISE */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">⏳</div>
               <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
               <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso. Aguarda que a liderança aprove o teu acesso ao painel!</p>
             </div>
           ) : userStatus === 'rejeitado' ? (
+            /* ECRÃ 3: REJEITADO (COM BOTÃO TENTAR NOVAMENTE) */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
               <div className="w-16 h-16 bg-red-600/10 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">❌</div>
               <h2 className="text-xl font-black text-white">Candidatura Rejeitada</h2>
@@ -211,6 +216,7 @@ export default function App() {
               </button>
             </div>
           ) : userStatus === 'aprovado' ? (
+            /* ECRÃ 4: PAINEL DE MEMBROS APROVADOS */
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Painel Geral de Membros Aprovados</h2>
               <div className="bg-[#181b20] border border-neutral-800 rounded-2xl overflow-hidden p-6">
@@ -235,12 +241,12 @@ export default function App() {
                             {m.estado}
                           </span>
                           {m.estado !== 'aprovado' && (
-                            <button onClick={() => handleAprovar(m.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg">
+                            <button onClick={() => handleAprovar(m.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg font-bold">
                               Aprovar
                             </button>
                           )}
                           {m.estado !== 'rejeitado' && (
-                            <button onClick={() => handleRejeitar(m.id)} className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded-lg">
+                            <button onClick={() => handleRejeitar(m.id)} className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded-lg font-bold">
                               Rejeitar
                             </button>
                           )}
@@ -252,7 +258,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* 📝 FORMULÁRIO SIMPLES APARECE LOGO APÓS O LOGIN DO DISCORD */
+            /* ECRÃ 5: FORMULÁRIO DE CANDIDATURA SIMPLES (LOGOUT/PENDENTE) */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <h2 className="text-xl font-black text-white text-center">Formulário de Candidatura</h2>
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
