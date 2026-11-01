@@ -13,7 +13,6 @@ import {
   orderBy 
 } from 'firebase/firestore';
 
-// Hierarquia e Definição de Cargos
 const ALL_ROLES = [
   { name: "Staff ATHOS PvP", category: "staff" },
   { name: "01 Founder´s", category: "staff", founder: true, admin: true },
@@ -52,20 +51,17 @@ export default function App() {
   const [userDoc, setUserDoc] = useState(null);
   const [currentView, setCurrentView] = useState('base');
   
-  // Estados para o formulário de Login/Registo por E-mail
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(true);
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
 
-  // Coleções Firestore em tempo real
   const [usersList, setUsersList] = useState([]);
   const [roupas, setRoupas] = useState([]);
   const [radios, setRadios] = useState({ principal: {}, alternativa: {} });
   const [regras, setRegras] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // Estados dos Formulários da Gang
   const [formCandidatura, setFormCandidatura] = useState({
     idade: '',
     nomeInGame: '',
@@ -80,9 +76,6 @@ export default function App() {
   const [editingRadio, setEditingRadio] = useState({ tipo: 'principal', freq: '', info: '' });
   const [selectedUserForRoles, setSelectedUserForRoles] = useState(null);
 
-  // -------------------------------------------------------------
-  // SISTEMA DE AUTENTICAÇÃO POR E-MAIL (LocalStorage + Firestore)
-  // -------------------------------------------------------------
   useEffect(() => {
     const savedUser = localStorage.getItem('magnatas_email_user');
     if (savedUser) {
@@ -97,14 +90,17 @@ export default function App() {
   }, []);
 
   const fetchUserDocument = async (uid) => {
-    const userRef = doc(db, 'users', uid);
-    const docSnap = await getDoc(userRef);
-    if (docSnap.exists()) {
-      setUserDoc(docSnap.data());
+    try {
+      const userRef = doc(db, 'users', uid);
+      const docSnap = await getDoc(userRef);
+      if (docSnap.exists()) {
+        setUserDoc(docSnap.data());
+      }
+    } catch (err) {
+      console.error("Erro ao buscar doc:", err);
     }
   };
 
-  // Escuta dados em tempo real no Firestore
   useEffect(() => {
     if (!user) return;
 
@@ -161,44 +157,50 @@ export default function App() {
       return;
     }
 
-    const cleanEmailId = emailInput.replace(/[^a-zA-Z0-9]/g, '_');
-    const userRef = doc(db, 'users', cleanEmailId);
-    const docSnap = await getDoc(userRef);
+    try {
+      const cleanEmailId = emailInput.trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+      const userRef = doc(db, 'users', cleanEmailId);
+      const docSnap = await getDoc(userRef);
 
-    if (isRegistering) {
-      if (docSnap.exists()) {
-        alert("Este e-mail já está registado!");
-        return;
-      }
-      if (!usernameInput) {
-        alert("Indica um nome de utilizador!");
-        return;
-      }
+      if (isRegistering) {
+        if (!usernameInput) {
+          alert("Indica um nome de utilizador!");
+          return;
+        }
 
-      const newUser = {
-        uid: cleanEmailId,
-        username: usernameInput,
-        email: emailInput,
-        avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
-        estado: 'pendente_candidatura',
-        roles: ['01 Visitant'],
-        createdAt: new Date().toISOString()
-      };
+        const newUser = {
+          uid: cleanEmailId,
+          username: usernameInput.trim(),
+          email: emailInput.trim(),
+          password: passwordInput, // Armazenado para validação simples
+          avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
+          estado: 'pendente_candidatura',
+          roles: ['01 Visitant'],
+          createdAt: new Date().toISOString()
+        };
 
-      await setDoc(userRef, newUser);
-      setUser(newUser);
-      setUserDoc(newUser);
-      localStorage.setItem('magnatas_email_user', JSON.stringify(newUser));
-      alert("Registo efetuado com sucesso!");
-    } else {
-      if (!docSnap.exists()) {
-        alert("Conta não encontrada. Regista-te primeiro!");
-        return;
+        await setDoc(userRef, newUser);
+        setUser(newUser);
+        setUserDoc(newUser);
+        localStorage.setItem('magnatas_email_user', JSON.stringify(newUser));
+        alert("Conta criada com sucesso!");
+      } else {
+        if (!docSnap.exists()) {
+          alert("Conta não encontrada. Regista-te primeiro!");
+          return;
+        }
+        const userData = docSnap.data();
+        if (userData.password && userData.password !== passwordInput) {
+          alert("Palavra-passe incorreta!");
+          return;
+        }
+        setUser(userData);
+        setUserDoc(userData);
+        localStorage.setItem('magnatas_email_user', JSON.stringify(userData));
       }
-      const userData = docSnap.data();
-      setUser(userData);
-      setUserDoc(userData);
-      localStorage.setItem('magnatas_email_user', JSON.stringify(userData));
+    } catch (error) {
+      console.error("Erro na autenticação:", error);
+      alert("Erro ao ligar à Base de Dados: " + error.message);
     }
   };
 
@@ -209,23 +211,23 @@ export default function App() {
   };
 
   const addAuditLog = async (acao, detalhe) => {
-    await addDoc(collection(db, 'logs'), {
-      autorId: user.uid,
-      autorName: user.username,
-      acao,
-      detalhe,
-      timestamp: new Date().toISOString()
-    });
+    try {
+      await addDoc(collection(db, 'logs'), {
+        autorId: user.uid,
+        autorName: user.username,
+        acao,
+        detalhe,
+        timestamp: new Date().toISOString()
+      });
+    } catch(e) { console.error(e); }
   };
 
-  // Permissões RBAC
   const userRoles = userDoc?.roles || [];
   const isFounder = userRoles.includes("01 Founder´s");
   const isLeader = isFounder || userRoles.includes("01 Leader´s");
   const isManager = isLeader || userRoles.includes("01 Manager´s") || userRoles.includes("Resp. Manager´s");
   const isSupport = isManager || userRoles.includes("Suport") || userRoles.includes("Manager´s Approval");
 
-  // Candidaturas
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     if (!formCandidatura.nomeInGame || !formCandidatura.idInGame || !formCandidatura.motivo) {
@@ -233,13 +235,17 @@ export default function App() {
       return;
     }
 
-    const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, {
-      ...formCandidatura,
-      estado: 'pendente_analise',
-      dataCandidatura: new Date().toISOString()
-    });
-    alert("Candidatura submetida com sucesso!");
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        ...formCandidatura,
+        estado: 'pendente_analise',
+        dataCandidatura: new Date().toISOString()
+      });
+      alert("Candidatura submetida com sucesso!");
+    } catch (err) {
+      alert("Erro ao submeter: " + err.message);
+    }
   };
 
   const handleAprovarCandidatura = async (targetUser) => {
@@ -260,24 +266,8 @@ export default function App() {
     await updateDoc(userRef, { estado: 'pendente_candidatura', nomeInGame: '', idInGame: '', motivo: '' });
   };
 
-  // Roupas
-  const handleAddRoupa = async (e) => {
-    e.preventDefault();
-    if (!isFounder) return alert("Apenas o Founder pode gerir roupas.");
-    await addDoc(collection(db, 'roupas'), { ...formRoupa, criadoPor: user.username });
-    setFormRoupa({ nome: '', numero: '', imagem: '' });
-  };
-
-  // Regras
-  const handleAddRegra = async (e) => {
-    e.preventDefault();
-    if (!isFounder) return;
-    await addDoc(collection(db, 'regras'), { ...formRegra, ordem: Number(formRegra.ordem) });
-    setFormRegra({ categoria: 'Gerais', titulo: '', descricao: '', ordem: regras.length + 1 });
-  };
-
   // -------------------------------------------------------------
-  // ECRÃ DE LOGIN / REGISTO POR E-MAIL
+  // ECRÃ DE LOGIN / REGISTO
   // -------------------------------------------------------------
   if (!user) {
     return (
@@ -333,8 +323,9 @@ export default function App() {
 
           <div className="text-center">
             <button 
+              type="button"
               onClick={() => setIsRegistering(!isRegistering)} 
-              className="text-xs text-neutral-400 hover:text-red-500 font-semibold"
+              className="text-xs text-neutral-400 hover:text-red-500 font-semibold cursor-pointer"
             >
               {isRegistering ? 'Já tens conta? Iniciar Sessão' : 'Não tens conta? Criar Registo'}
             </button>
@@ -344,7 +335,7 @@ export default function App() {
     );
   }
 
-  // Formulário de Candidatura
+  // Candidatura
   if (userDoc?.estado === 'pendente_candidatura') {
     return (
       <div className="min-h-screen bg-[#0d0f12] text-gray-100 p-6 flex items-center justify-center">
@@ -399,7 +390,7 @@ export default function App() {
   }
 
   // -------------------------------------------------------------
-  // DASHBOARD PRINCIPAL (Membros Aprovados)
+  // DASHBOARD PRINCIPAL
   // -------------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#0d0f12] text-gray-200 font-sans flex">
@@ -476,7 +467,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Outras vistas mantêm-se operacionais e integradas */}
           {currentView === 'cargos' && <div className="text-white text-sm">Estrutura de Cargos ativa.</div>}
           {currentView === 'roupas' && <div className="text-white text-sm">Catálogo de Roupas ativo.</div>}
           {currentView === 'radio' && <div className="text-white text-sm">Frequências de Rádio ativas.</div>}
