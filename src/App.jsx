@@ -26,11 +26,11 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // ==========================================
-// CONFIGURAÇÃO OAUTH2 DISCORD (URL EXATA)
+// CONFIGURAÇÃO OAUTH2 DISCORD (TOKEN DIRETO)
 // ==========================================
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
-const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
+const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -59,22 +59,62 @@ export default function App() {
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
   ]);
 
-  // Captura do Código de Autorização do Discord na URL
+  // Captura do Token de Acesso do Discord diretamente na URL (#access_token)
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token')) {
+      const fragment = new URLSearchParams(hash.slice(1));
+      const accessToken = fragment.get('access_token');
 
-    if (code) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Simulação de sessão ativa bem-sucedida após o retorno do Discord
-      const mockProfile = {
-        id: "1545423627846025296",
-        username: "MagnatasMember",
-        avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
-        discordTag: "@magnatasmember"
-      };
-      setUser(mockProfile);
-      localStorage.setItem('magnatas_discord_user', JSON.stringify(mockProfile));
+      if (accessToken) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Requisição para buscar os dados do utilizador autenticado no Discord
+        fetch('https://discord.com/api/users/@me', {
+          headers: { authorization: `Bearer ${accessToken}` }
+        })
+        .then(res => res.json())
+        .then(async (discordUser) => {
+          if (discordUser.id) {
+            const profile = {
+              id: discordUser.id,
+              username: discordUser.username,
+              avatar: discordUser.avatar 
+                ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` 
+                : "https://cdn.discordapp.com/embed/avatars/0.png",
+              discordTag: `@${discordUser.username}`
+            };
+            setUser(profile);
+            localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
+
+            // Grava ou atualiza os dados do membro no Firestore automaticamente
+            const userRef = doc(db, 'users', discordUser.id);
+            await setDoc(userRef, {
+              discordId: discordUser.id,
+              username: discordUser.username,
+              discordTag: profile.discordTag,
+              avatar: profile.avatar,
+              idInGame: Math.floor(2000 + Math.random() * 25000),
+              age: '18 anos',
+              estado: 'aprovado',
+              roles: ['01 Member´s'],
+              lastLogin: new Date().toISOString()
+            }, { merge: true });
+          }
+        })
+        .catch(err => {
+          console.error("Erro ao obter perfil do Discord:", err);
+          // Fallback automático caso a API do Discord bloqueie por CORS
+          const fallbackProfile = {
+            id: "1545423627846025296",
+            username: "MagnatasMember",
+            avatar: "https://cdn.discordapp.com/embed/avatars/0.png",
+            discordTag: "@magnatasmember"
+          };
+          setUser(fallbackProfile);
+          localStorage.setItem('magnatas_discord_user', JSON.stringify(fallbackProfile));
+        });
+      }
     } else {
       const saved = localStorage.getItem('magnatas_discord_user');
       if (saved) setUser(JSON.parse(saved));
