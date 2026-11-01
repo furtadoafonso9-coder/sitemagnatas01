@@ -24,23 +24,21 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = getFirestore(app); // Apenas Firestore, sem dependências de Auth problemáticas!
 
 // ==========================================
 // CONFIGURAÇÃO OAUTH2 DISCORD
 // ==========================================
 const DISCORD_CLIENT_ID = "1545423627846025296"; 
 const REDIRECT_URI = "https://sitemagnatas01-cgr6-6ng0k1x14-magnatas01.vercel.app";
-// Pedimos o escopo 'guilds' para conseguir verificar os servidores do utilizador
 const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify+guilds+email`;
 
-// ID do Servidor do Discord dos Magnatas 01 (substitui pelo ID real do teu servidor se necessário)
 const MAGNATAS_GUILD_ID = "123456789012345678"; 
 const DISCORD_INVITE_LINK = "https://discord.gg/magnatas01";
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [userStatus, setUserStatus] = useState('verificando'); // 'verificando', 'fora_do_servidor', 'pendente_candidatura', 'pendente_analise', 'aprovado'
+  const [userStatus, setUserStatus] = useState('verificando'); 
   const [currentView, setCurrentView] = useState('gestao');
   const [subView, setSubView] = useState('membros'); 
   const [darkMode, setDarkMode] = useState(true);
@@ -48,7 +46,6 @@ export default function App() {
   const [usersList, setUsersList] = useState([]);
   const [stats, setStats] = useState({ ativos: 12, pendentes: 2, warnings: 0, staff: 1 });
 
-  // Formulário de Candidatura
   const [formCandidatura, setFormCandidatura] = useState({ idInGame: '', idade: '', motivo: '' });
 
   const [candidaturas, setCandidaturas] = useState([
@@ -66,7 +63,7 @@ export default function App() {
     { id: 2, nome: "Canal Ação / Assaltos", freq: "88.2 MHz", status: "Restrita" }
   ]);
 
-  // Captura do Token do Discord e Verificação de Servidores
+  // Captura do Token do Discord na URL e Gestão de Estado
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes('access_token')) {
@@ -76,7 +73,6 @@ export default function App() {
       if (accessToken) {
         window.history.replaceState({}, document.title, window.location.pathname);
         
-        // 1. Obter dados do utilizador
         fetch('https://discord.com/api/users/@me', {
           headers: { authorization: `Bearer ${accessToken}` }
         })
@@ -94,26 +90,21 @@ export default function App() {
             setUser(profile);
             localStorage.setItem('magnatas_discord_user', JSON.stringify(profile));
 
-            // 2. Verificar se o utilizador está no servidor dos Magnatas através do endpoint /users/@me/guilds
             try {
               const guildsRes = await fetch('https://discord.com/api/users/@me/guilds', {
                 headers: { authorization: `Bearer ${accessToken}` }
               });
               const guilds = await guildsRes.json();
-              
-              // Verifica se o ID do servidor do Magnatas está na lista de servidores do utilizador
               const isInServer = Array.isArray(guilds) && guilds.some(g => g.id === MAGNATAS_GUILD_ID);
 
-              // Se não estiver no servidor, bloqueia com aviso para entrar
               if (!isInServer && MAGNATAS_GUILD_ID !== "123456789012345678") {
                 setUserStatus('fora_do_servidor');
                 return;
               }
             } catch (e) {
-              console.warn("Não foi possível verificar as guilds via API, prosseguindo com base no Firestore.");
+              console.warn("Verificação de grémios ignorada por restrição de CORS.");
             }
 
-            // 3. Verificar estado atual no Firestore
             const userRef = doc(db, 'users', discordUser.id);
             const docSnap = await getDoc(userRef);
             
@@ -150,7 +141,6 @@ export default function App() {
     }
   }, []);
 
-  // Leitura em Tempo Real do Firestore
   useEffect(() => {
     const unsubscribeUsersCollection = onSnapshot(collection(db, 'users'), (snapshot) => {
       let members = [];
@@ -179,11 +169,10 @@ export default function App() {
     setUserStatus('pendente_candidatura');
   };
 
-  // Submeter Candidatura
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     if (!formCandidatura.idInGame || !formCandidatura.motivo) {
-      alert('Preenche todos os campos obrigatórios da candidatura!');
+      alert('Preenche todos os campos obrigatórios!');
       return;
     }
 
@@ -196,7 +185,7 @@ export default function App() {
     });
 
     setUserStatus('pendente_analise');
-    alert('Candidatura enviada com sucesso! Aguarda a aprovação da Staff.');
+    alert('Candidatura enviada com sucesso! Aguarda aprovação da Staff.');
   };
 
   const handleAprovarCandidatura = async (id, discordId) => {
@@ -215,7 +204,7 @@ export default function App() {
   return (
     <div className={darkMode ? "min-h-screen bg-[#121418] text-gray-200 font-sans flex" : "min-h-screen bg-gray-100 text-gray-800 font-sans flex"}>
       
-      {/* SIDEBAR (Apenas para utilizadores autenticados E aprovados) */}
+      {/* SIDEBAR EXCLUSIVA PARA APROVADOS */}
       {user && userStatus === 'aprovado' && (
         <aside className={`w-64 border-r ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20`}>
           <div>
@@ -259,19 +248,10 @@ export default function App() {
               <span>⚙️</span>
               <span>Painel Admin & Suporte</span>
             </button>
-            
-            <button 
-              onClick={() => setCurrentView('perfil')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition ${currentView === 'perfil' ? 'bg-red-600 text-white shadow-lg' : 'bg-neutral-800/60 text-gray-300 hover:bg-neutral-800'}`}
-            >
-              <span>👤</span>
-              <span>Meu Perfil & Discord</span>
-            </button>
           </div>
         </aside>
       )}
 
-      {/* CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
         
         <header className={`h-16 border-b ${darkMode ? 'bg-[#181b20] border-neutral-800' : 'bg-white border-gray-200'} px-8 flex justify-between items-center sticky top-0 z-30 shadow-sm`}>
@@ -287,7 +267,7 @@ export default function App() {
                 Sair ({user.username})
               </button>
             ) : (
-              <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition">
+              <button onClick={handleDiscordLogin} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold transition">
                 Entrar com Discord
               </button>
             )}
@@ -302,55 +282,44 @@ export default function App() {
               </div>
               <h1 className="text-2xl font-black mb-3 text-white">Autenticação Obrigatória</h1>
               <p className="text-neutral-400 text-xs leading-relaxed mb-8">
-                Efetua login com o Discord para verificar a tua adesão ao servidor e submeter a candidatura aos Magnatas 01.
+                Efetua login com o Discord para aceder ao portal e submeter a tua candidatura aos Magnatas 01.
               </p>
               <button 
                 onClick={handleDiscordLogin}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs tracking-wider uppercase shadow-xl shadow-indigo-600/30 transition duration-200"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs tracking-wider uppercase shadow-xl transition duration-200"
               >
                 VINCULAR DISCORD (OAUTH2)
               </button>
             </div>
           ) : userStatus === 'fora_do_servidor' ? (
-            /* AVISO CASO NÃO ESTEJA NO SERVIDOR DO DISCORD */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-red-500/30 shadow-2xl space-y-6">
-              <div className="w-20 h-20 bg-red-600/10 border border-red-500/20 text-red-500 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black">
+              <div className="w-20 h-20 bg-red-600/10 text-red-500 rounded-3xl mx-auto flex items-center justify-center text-3xl font-black">
                 ⚠️
               </div>
               <h1 className="text-2xl font-black text-white">Servidor Não Encontrado</h1>
               <p className="text-neutral-400 text-xs leading-relaxed">
-                Olá, <span className="text-indigo-400 font-bold">{user.username}</span>! O bot detetou que **não estás no servidor oficial do Discord** dos Magnatas 01.
+                Olá, <span className="text-indigo-400 font-bold">{user.username}</span>! Não estás no servidor oficial do Discord dos Magnatas 01.
               </p>
-              <div className="pt-2">
-                <a 
-                  href={DISCORD_INVITE_LINK} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs tracking-wider uppercase shadow-xl transition"
-                >
-                  Entrar no Discord dos Magnatas 01
-                </a>
-              </div>
-              <p className="text-[10px] text-neutral-500">Depois de entrasres no servidor, faz login novamente.</p>
+              <a href={DISCORD_INVITE_LINK} target="_blank" rel="noreferrer" className="inline-block bg-indigo-600 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs uppercase shadow-xl">
+                Entrar no Discord dos Magnatas 01
+              </a>
             </div>
           ) : userStatus === 'pendente_analise' ? (
-            /* AVISO DE CANDIDATURA EM ANÁLISE */
             <div className="max-w-xl mx-auto my-16 p-10 text-center rounded-3xl bg-[#181b20] border border-neutral-800 shadow-2xl space-y-4">
-              <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black border border-amber-500/20">
+              <div className="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
                 ⏳
               </div>
               <h2 className="text-xl font-black text-white">Candidatura em Análise</h2>
-              <p className="text-xs text-neutral-400">A tua candidatura já foi submetida e está a ser avaliada pela liderança. Assim que fores aprovado, o painel completo será desbloqueado.</p>
+              <p className="text-xs text-neutral-400">A tua candidatura foi submetida com sucesso e está a ser avaliada pela liderança!</p>
             </div>
           ) : userStatus !== 'aprovado' ? (
-            /* FORMULÁRIO DE CANDIDATURA (LIBERADO SE ESTIVER NO SERVIDOR) */
             <div className="max-w-xl mx-auto my-12 p-8 bg-[#181b20] border border-neutral-800 rounded-3xl shadow-2xl space-y-6">
               <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-emerald-600/10 border border-emerald-500/20 text-emerald-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
+                <div className="w-16 h-16 bg-emerald-600/10 text-emerald-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">
                   ✅
                 </div>
-                <h2 className="text-xl font-black text-white">Servidor Verificado! Formulário de Candidatura</h2>
-                <p className="text-xs text-neutral-400">Parabéns, <span className="text-indigo-400 font-bold">{user.username}</span>! Estás no servidor oficial. Preenche os dados abaixo:</p>
+                <h2 className="text-xl font-black text-white">Formulário de Candidatura</h2>
+                <p className="text-xs text-neutral-400">Preenche os dados abaixo para submeter a tua entrada:</p>
               </div>
 
               <form onSubmit={handleSubmitCandidatura} className="space-y-4">
@@ -388,16 +357,12 @@ export default function App() {
                   ></textarea>
                 </div>
 
-                <button 
-                  type="submit"
-                  className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition"
-                >
+                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">
                   Enviar Candidatura para Análise
                 </button>
               </form>
             </div>
           ) : (
-            /* PAINEL COMPLETO PARA MEMBROS APROVADOS */
             <div className="space-y-6">
               <div className="flex gap-4 border-b border-neutral-800 pb-4">
                 <button onClick={() => setSubView('membros')} className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition ${subView === 'membros' ? 'bg-red-600 text-white' : 'bg-neutral-800/50 text-neutral-400'}`}>
