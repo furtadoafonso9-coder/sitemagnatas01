@@ -177,8 +177,9 @@ export default function App() {
   };
 
   const userRoles = userDoc?.roles || [];
-  const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER");
-  const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader´s") || userRoles.includes("01 DEV") || userRoles.includes("STAFF ATHOS PVP");
+  // Permissões de Owner e Suporte
+  const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER") || userRoles.includes("01 DEV");
+  const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader´s") || userRoles.includes("STAFF ATHOS PVP");
 
   const handleFileUpload = (e, callback) => {
     const file = e.target.files[0];
@@ -250,18 +251,23 @@ export default function App() {
   // Regras
   const handleAddRegra = async (e) => {
     e.preventDefault();
-    if (!isFounder) return;
-    await addDoc(collection(db, 'regras'), { ...formRegra, ordem: Number(formRegra.ordem) });
-    setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 1 });
+    if (!isFounder) return alert("Apenas o Owner pode gerir regras!");
+    await addDoc(collection(db, 'regras'), { 
+      ...formRegra, 
+      ordem: Number(formRegra.ordem) || (regras.length + 1) 
+    });
+    setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 2 });
     await addLog("Regras", `Adicionou a regra: ${formRegra.titulo}`);
+    alert("Regra publicada com sucesso!");
   };
 
   const handleDeleteRegra = async (id) => {
     if (!isFounder) return;
     await deleteDoc(doc(db, 'regras', id));
+    await addLog("Regras", "Eliminou uma regra do servidor");
   };
 
-  // Punições & Revogações
+  // Punições & Revogações (Unban)
   const handleAplicarPunicao = async (e) => {
     e.preventDefault();
     if (!formPunicao.targetUserId) return alert("Seleciona um membro!");
@@ -292,9 +298,9 @@ export default function App() {
   };
 
   const handleRevogarBan = async (targetUser) => {
-    if (!isSupport) return;
+    if (!isSupport) return alert("Sem permissão para revogar banimentos!");
     await updateDoc(doc(db, 'users', targetUser.id), { estado: 'aprovado' });
-    alert(`O banimento de ${targetUser.username} foi revogado!`);
+    alert(`O banimento de ${targetUser.username} foi revogado com sucesso!`);
     await addLog("Unban", `Revogou o banimento de ${targetUser.username}`);
   };
 
@@ -374,7 +380,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0d0e12] text-gray-200 font-sans flex relative">
-      {/* SIDEBAR */}
+      {/* SIDEBAR DE NAVEGAÇÃO */}
       <aside className="w-64 bg-[#121418] border-r border-neutral-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
         <div>
           <div className="p-5 border-b border-neutral-800/60 flex items-center gap-3">
@@ -401,7 +407,7 @@ export default function App() {
         )}
       </aside>
 
-      {/* ÁREA DE CONTEÚDO */}
+      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-neutral-800/80 bg-[#121418] px-8 flex justify-between items-center sticky top-0 z-30">
           <h1 className="font-black text-sm uppercase tracking-wider text-red-600">MAGNATAS 01! &bull; {currentView.toUpperCase()}</h1>
@@ -530,13 +536,15 @@ export default function App() {
             </div>
           )}
 
-          {/* REGRAS OFICIAIS */}
+          {/* REGRAS OFICIAIS DO SERVIDOR */}
           {currentView === 'regras' && (
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Regras Oficiais do Servidor</h2>
+              
+              {/* Form de publicação visível para Owner / Founder / Dev */}
               {isFounder && (
                 <form onSubmit={handleAddRegra} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Nova Regra (Apenas Owner)</h3>
+                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar / Publicar Nova Regra (Apenas Owner)</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <input type="text" placeholder="Título da Regra" value={formRegra.titulo} onChange={e => setFormRegra({...formRegra, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
                     <input type="number" placeholder="Ordem de Exibição" value={formRegra.ordem} onChange={e => setFormRegra({...formRegra, ordem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
@@ -547,19 +555,23 @@ export default function App() {
               )}
 
               <div className="space-y-4">
-                {regras.map((r, i) => (
-                  <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start space-x-4">
-                    <div className="space-y-1">
-                      <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
-                      <p className="text-xs text-neutral-300 leading-relaxed">{r.descricao}</p>
+                {regras.length === 0 ? (
+                  <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl text-center text-neutral-500 text-xs">Ainda não existem regras publicadas.</div>
+                ) : (
+                  regras.map((r, i) => (
+                    <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start space-x-4">
+                      <div className="space-y-1">
+                        <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
+                        <p className="text-xs text-neutral-300 leading-relaxed">{r.descricao}</p>
+                      </div>
+                      {isFounder && (
+                        <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900 shrink-0">
+                          Remover
+                        </button>
+                      )}
                     </div>
-                    {isFounder && (
-                      <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900 shrink-0">
-                        Remover
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}
