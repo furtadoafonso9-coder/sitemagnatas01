@@ -55,9 +55,9 @@ export default function App() {
   const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
   const [formPerfil, setFormPerfil] = useState({ avatar: '', biografia: '' });
   const [formRoupa, setFormRoupa] = useState({ nome: '', numero: '', imagem: '' });
+  const [formRegra, setFormRegra] = useState({ titulo: '', descricao: '', ordem: 1 });
   const [formRadio, setFormRadio] = useState({ titulo: '', frequencia: '', info: '' });
   const [formPunicao, setFormPunicao] = useState({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
-  const [formNota, setFormNota] = useState({ targetUserId: '', nota: '' });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('magnatas_email_user');
@@ -156,8 +156,7 @@ export default function App() {
           roles: ["01 Member´s", "HOMEM"],
           destacado: false,
           ausente: false,
-          punicoes: [],
-          notasInternas: []
+          punicoes: []
         };
         await setDoc(userRef, newUser);
         setUser(newUser); setUserDoc(newUser);
@@ -179,8 +178,8 @@ export default function App() {
 
   const userRoles = userDoc?.roles || [];
   const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER");
+  const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader´s") || userRoles.includes("01 DEV") || userRoles.includes("STAFF ATHOS PVP");
 
-  // Função auxiliar para carregar foto de ficheiro local (PC)
   const handleFileUpload = (e, callback) => {
     const file = e.target.files[0];
     if (file) {
@@ -190,7 +189,7 @@ export default function App() {
     }
   };
 
-  // Ações de Perfil
+  // Perfil
   const handleSavePerfil = async (e) => {
     e.preventDefault();
     const userRef = doc(db, 'users', user.uid);
@@ -201,7 +200,7 @@ export default function App() {
     alert("Perfil atualizado com sucesso!");
   };
 
-  // Ações de Candidatura
+  // Candidatura
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     const userRef = doc(db, 'users', user.uid);
@@ -219,13 +218,13 @@ export default function App() {
     await addLog("Reprovação", `Reprovou a candidatura de ${targetUser.username}`);
   };
 
-  // Ações de Roupas
+  // Roupas
   const handleAddRoupa = async (e) => {
     e.preventDefault();
     if (!isFounder) return alert("Apenas o Owner/Founder pode adicionar roupas!");
     await addDoc(collection(db, 'roupas'), formRoupa);
     setFormRoupa({ nome: '', numero: '', imagem: '' });
-    await addLog("Roupas", `Adicionou roupa/kit ${formRoupa.nome}`);
+    await addLog("Roupas", `Adicionou kit ${formRoupa.nome}`);
   };
 
   const handleDeleteRoupa = async (id) => {
@@ -233,7 +232,7 @@ export default function App() {
     await deleteDoc(doc(db, 'roupas', id));
   };
 
-  // Ações de Rádio
+  // Rádio
   const handleAddRadio = async (e) => {
     e.preventDefault();
     if (!isFounder) return;
@@ -248,7 +247,21 @@ export default function App() {
     await addLog("Rádio", "Eliminou uma frequência de rádio");
   };
 
-  // Ações de Punição
+  // Regras
+  const handleAddRegra = async (e) => {
+    e.preventDefault();
+    if (!isFounder) return;
+    await addDoc(collection(db, 'regras'), { ...formRegra, ordem: Number(formRegra.ordem) });
+    setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 1 });
+    await addLog("Regras", `Adicionou a regra: ${formRegra.titulo}`);
+  };
+
+  const handleDeleteRegra = async (id) => {
+    if (!isFounder) return;
+    await deleteDoc(doc(db, 'regras', id));
+  };
+
+  // Punições & Revogações
   const handleAplicarPunicao = async (e) => {
     e.preventDefault();
     if (!formPunicao.targetUserId) return alert("Seleciona um membro!");
@@ -276,6 +289,13 @@ export default function App() {
     alert("Punição aplicada com sucesso!");
     await addLog("Punição", `Aplicou ${formPunicao.tipo} a ${target.username}`);
     setFormPunicao({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
+  };
+
+  const handleRevogarBan = async (targetUser) => {
+    if (!isSupport) return;
+    await updateDoc(doc(db, 'users', targetUser.id), { estado: 'aprovado' });
+    alert(`O banimento de ${targetUser.username} foi revogado!`);
+    await addLog("Unban", `Revogou o banimento de ${targetUser.username}`);
   };
 
   const handleToggleRole = async (targetId, roleName) => {
@@ -365,16 +385,20 @@ export default function App() {
             <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'base' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👥</span> Base da Gang</button>
             <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👕</span> Roupas & Kits</button>
             <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'radio' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📡</span> Frequências Rádio</button>
+            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'regras' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📖</span> Regras Oficiais</button>
             <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>🎖️</span> Lista de Cargos</button>
             <button onClick={() => setCurrentView('meusavisos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'meusavisos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>⚠️</span> Meus Avisos / Punições</button>
             <button onClick={() => setCurrentView('perfil')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'perfil' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👤</span> Meu Perfil & Discord</button>
           </nav>
         </div>
-        <div className="p-3">
-          <button onClick={() => setCurrentView('admin')} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-black py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition">
-            <span>⚙️</span> Painel Admin & Suporte
-          </button>
-        </div>
+
+        {isSupport && (
+          <div className="p-3">
+            <button onClick={() => setCurrentView('admin')} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-black py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition">
+              <span>⚙️</span> Painel Admin & Suporte
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* ÁREA DE CONTEÚDO */}
@@ -433,7 +457,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ROUPAS & KITS (Número em Destaque + Upload do PC / URL) */}
+          {/* ROUPAS & KITS */}
           {currentView === 'roupas' && (
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Roupas & Kits Oficiais</h2>
@@ -472,7 +496,7 @@ export default function App() {
             </div>
           )}
 
-          {/* FREQUÊNCIAS RÁDIO (Eliminar, Adicionar e Editar Mensagens/Freqs) */}
+          {/* FREQUÊNCIAS RÁDIO */}
           {currentView === 'radio' && (
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Frequências Rádio</h2>
@@ -506,6 +530,40 @@ export default function App() {
             </div>
           )}
 
+          {/* REGRAS OFICIAIS */}
+          {currentView === 'regras' && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-black text-white">Regras Oficiais do Servidor</h2>
+              {isFounder && (
+                <form onSubmit={handleAddRegra} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
+                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Nova Regra (Apenas Owner)</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="text" placeholder="Título da Regra" value={formRegra.titulo} onChange={e => setFormRegra({...formRegra, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="number" placeholder="Ordem de Exibição" value={formRegra.ordem} onChange={e => setFormRegra({...formRegra, ordem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                  </div>
+                  <textarea placeholder="Descrição detalhada da regra..." value={formRegra.descricao} onChange={e => setFormRegra({...formRegra, descricao: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
+                  <button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase">Publicar Regra</button>
+                </form>
+              )}
+
+              <div className="space-y-4">
+                {regras.map((r, i) => (
+                  <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start space-x-4">
+                    <div className="space-y-1">
+                      <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
+                      <p className="text-xs text-neutral-300 leading-relaxed">{r.descricao}</p>
+                    </div>
+                    {isFounder && (
+                      <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900 shrink-0">
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* LISTA DE CARGOS */}
           {currentView === 'cargos' && (
             <div className="space-y-6">
@@ -523,7 +581,7 @@ export default function App() {
             </div>
           )}
 
-          {/* MEUS AVISOS / PUNIÇÕES (Visível para o próprio Player) */}
+          {/* MEUS AVISOS / PUNIÇÕES */}
           {currentView === 'meusavisos' && (
             <div className="space-y-6 max-w-2xl mx-auto">
               <h2 className="text-xl font-black text-white flex items-center gap-2">⚠️ Meus Avisos / Histórico de Punições</h2>
@@ -550,7 +608,7 @@ export default function App() {
             </div>
           )}
 
-          {/* MEU PERFIL & DISCORD (Carregar Foto do PC ou URL + Biografia) */}
+          {/* MEU PERFIL & DISCORD */}
           {currentView === 'perfil' && (
             <div className="max-w-xl mx-auto bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-6">
               <div className="flex items-center gap-4 border-b border-neutral-800 pb-6">
@@ -581,12 +639,12 @@ export default function App() {
           )}
 
           {/* PAINEL ADMIN COMPLETO */}
-          {currentView === 'admin' && (
+          {currentView === 'admin' && isSupport && (
             <div className="space-y-6">
               <div className="flex gap-2 border-b border-neutral-800 pb-4 overflow-x-auto">
                 <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⏳ Candidaturas</button>
                 <button onClick={() => setAdminTab('cargos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'cargos' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>🎖️ Gestão de Cargos</button>
-                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Aplicar Punições</button>
+                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Aplicar Punições / Revogar Ban</button>
                 <button onClick={() => setAdminTab('logs')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'logs' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📜 Logs</button>
               </div>
 
@@ -654,24 +712,51 @@ export default function App() {
                 </div>
               )}
 
+              {/* GESTÃO DE PUNIÇÕES & REVOGAÇÃO DE BANIMENTOS */}
               {adminTab === 'punicoes' && (
-                <form onSubmit={handleAplicarPunicao} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl max-w-lg space-y-4">
-                  <h3 className="text-sm font-black text-red-500 uppercase">Aplicar Punição a Membro</h3>
-                  <select value={formPunicao.targetUserId} onChange={e => setFormPunicao({...formPunicao, targetUserId: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required>
-                    <option value="">Seleciona o membro...</option>
-                    {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username} (@{u.username})</option>)}
-                  </select>
-                  <select value={formPunicao.tipo} onChange={e => setFormPunicao({...formPunicao, tipo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
-                    <option value="Warning 1">Warning 1</option>
-                    <option value="Warning 2">Warning 2</option>
-                    <option value="Muted">Mute Temporário</option>
-                    <option value="Ban Temporário">Ban Temporário</option>
-                    <option value="Ban Perma">Ban Permanente</option>
-                  </select>
-                  <input type="text" placeholder="Duração (ex: 3 dias / Permanente)" value={formPunicao.tempo} onChange={e => setFormPunicao({...formPunicao, tempo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                  <textarea placeholder="Motivo da punição..." value={formPunicao.motivo} onChange={e => setFormPunicao({...formPunicao, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-                  <button type="submit" className="w-full bg-red-600 text-white font-bold py-3.5 rounded-xl text-xs uppercase">Aplicar Punição</button>
-                </form>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <form onSubmit={handleAplicarPunicao} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4">
+                    <h3 className="text-sm font-black text-red-500 uppercase">Aplicar Punição a Membro</h3>
+                    <select value={formPunicao.targetUserId} onChange={e => setFormPunicao({...formPunicao, targetUserId: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required>
+                      <option value="">Seleciona o membro...</option>
+                      {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username} (@{u.username})</option>)}
+                    </select>
+                    <select value={formPunicao.tipo} onChange={e => setFormPunicao({...formPunicao, tipo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
+                      <option value="Warning 1">Warning 1</option>
+                      <option value="Warning 2">Warning 2</option>
+                      <option value="Muted">Mute Temporário</option>
+                      <option value="Ban Temporário">Ban Temporário</option>
+                      <option value="Ban Perma">Ban Permanente</option>
+                    </select>
+                    <input type="text" placeholder="Duração (ex: 3 dias / Permanente)" value={formPunicao.tempo} onChange={e => setFormPunicao({...formPunicao, tempo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <textarea placeholder="Motivo da punição..." value={formPunicao.motivo} onChange={e => setFormPunicao({...formPunicao, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
+                    <button type="submit" className="w-full bg-red-600 text-white font-bold py-3.5 rounded-xl text-xs uppercase">Aplicar Punição</button>
+                  </form>
+
+                  {/* SUB-PAINEL DE REVOGAR BANIMENTOS (UNBAN) */}
+                  <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4">
+                    <h3 className="text-sm font-black text-emerald-400 uppercase">Revogar Banimentos (Unban)</h3>
+                    <p className="text-xs text-neutral-400">Lista de utilizadores atualmente banidos ou rejeitados:</p>
+                    
+                    <div className="space-y-3 max-h-80 overflow-y-auto">
+                      {usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado').length === 0 ? (
+                        <div className="text-xs text-neutral-500 bg-neutral-900/60 p-4 rounded-xl text-center">Nenhum membro atualmente banido.</div>
+                      ) : (
+                        usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado').map(banned => (
+                          <div key={banned.id} className="bg-neutral-900 p-4 rounded-xl flex justify-between items-center border border-neutral-800">
+                            <div>
+                              <h4 className="font-bold text-white text-xs">{banned.nomeInGame || banned.username}</h4>
+                              <span className="text-[10px] text-red-400 uppercase font-bold">Estado: {banned.estado}</span>
+                            </div>
+                            <button onClick={() => handleRevogarBan(banned)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg uppercase">
+                              Revogar Ban
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
 
               {adminTab === 'logs' && (
