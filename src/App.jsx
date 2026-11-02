@@ -177,7 +177,6 @@ export default function App() {
   };
 
   const userRoles = userDoc?.roles || [];
-  // Permissões de Owner e Suporte
   const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER") || userRoles.includes("01 DEV");
   const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader´s") || userRoles.includes("STAFF ATHOS PVP");
 
@@ -201,12 +200,22 @@ export default function App() {
     alert("Perfil atualizado com sucesso!");
   };
 
-  // Candidatura
+  // CANDIDATURA COM ATUALIZAÇÃO IMEDIATA DO ESTADO
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
-    const userRef = doc(db, 'users', user.uid);
-    await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
-    alert("Candidatura submetida!");
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      
+      // 1. Atualiza no Firestore
+      await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
+      
+      // 2. Atualiza os estados locais para mudar a tela instantaneamente
+      setUserDoc(prev => ({ ...prev, ...formCandidatura, estado: 'pendente_analise' }));
+      
+      await addLog("Candidatura", `Submeteu candidatura in-game como ${formCandidatura.nomeInGame}`);
+    } catch (err) {
+      alert("Erro ao submeter candidatura: " + err.message);
+    }
   };
 
   const handleAprovarCandidatura = async (targetUser) => {
@@ -312,6 +321,7 @@ export default function App() {
     await updateDoc(doc(db, 'users', targetId), { roles: updated });
   };
 
+  // TELA DE AUTENTICAÇÃO
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0a0b0d] text-gray-100 flex flex-col justify-center items-center p-6 font-sans">
@@ -341,6 +351,7 @@ export default function App() {
     );
   }
 
+  // TELA 1: FORMULÁRIO DE CANDIDATURA (PENDENTE DE PREENCHIMENTO)
   if (userDoc?.estado === 'pendente_candidatura') {
     return (
       <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center">
@@ -362,6 +373,33 @@ export default function App() {
             <textarea placeholder="Motivo de entrada..." value={formCandidatura.motivo} onChange={e => setFormCandidatura({...formCandidatura, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
             <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Submeter Candidatura</button>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // TELA 2: TELA DE AGUARDE (PENDENTE DE ANÁLISE PELA STAFF/OWNER)
+  if (userDoc?.estado === 'pendente_analise') {
+    return (
+      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
+        <div className="max-w-md w-full bg-[#121418] border border-amber-500/30 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
+          <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 text-amber-500 rounded-full mx-auto flex items-center justify-center text-4xl animate-pulse">
+            ⏳
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl font-black text-white uppercase tracking-wider">CANDIDATURA EM ANÁLISE</h1>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              A tua candidatura foi recebida com sucesso! Por favor aguarda enquanto a administração avalia o teu pedido.
+            </p>
+          </div>
+          <div className="p-4 bg-neutral-900/80 border border-neutral-800 rounded-xl text-left space-y-1">
+            <p className="text-[11px] text-neutral-400"><strong>In-Game:</strong> {userDoc?.nomeInGame || 'N/A'}</p>
+            <p className="text-[11px] text-neutral-400"><strong>ID:</strong> {userDoc?.idInGame || 'N/A'}</p>
+            <p className="text-[11px] text-amber-400 font-bold mt-2">Estado: Pendente de Aprovação</p>
+          </div>
+          <button onClick={handleLogout} className="w-full bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold py-3 rounded-xl text-xs uppercase border border-neutral-800 transition">
+            Encerrar Sessão
+          </button>
         </div>
       </div>
     );
@@ -536,12 +574,11 @@ export default function App() {
             </div>
           )}
 
-          {/* REGRAS OFICIAIS DO SERVIDOR */}
+          {/* REGRAS OFICIAIS */}
           {currentView === 'regras' && (
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Regras Oficiais do Servidor</h2>
               
-              {/* Form de publicação visível para Owner / Founder / Dev */}
               {isFounder && (
                 <form onSubmit={handleAddRegra} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
                   <h3 className="text-xs font-black text-red-500 uppercase">Adicionar / Publicar Nova Regra (Apenas Owner)</h3>
