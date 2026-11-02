@@ -205,16 +205,24 @@ export default function App() {
     e.preventDefault();
     try {
       const userRef = doc(db, 'users', user.uid);
-      
-      // 1. Atualiza no Firestore
       await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
-      
-      // 2. Atualiza os estados locais para mudar a tela instantaneamente
       setUserDoc(prev => ({ ...prev, ...formCandidatura, estado: 'pendente_analise' }));
-      
       await addLog("Candidatura", `Submeteu candidatura in-game como ${formCandidatura.nomeInGame}`);
     } catch (err) {
       alert("Erro ao submeter candidatura: " + err.message);
+    }
+  };
+
+  // REINICIAR CANDIDATURA (TENTAR NOVAMENTE APÓS REJEIÇÃO)
+  const handleTentarNovamente = async () => {
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { estado: 'pendente_candidatura' });
+      setUserDoc(prev => ({ ...prev, estado: 'pendente_candidatura' }));
+      setFormCandidatura({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
+      await addLog("Candidatura", `Solicitou uma nova tentativa de candidatura.`);
+    } catch (err) {
+      alert("Erro ao reiniciar candidatura: " + err.message);
     }
   };
 
@@ -354,7 +362,7 @@ export default function App() {
   // TELA 1: FORMULÁRIO DE CANDIDATURA (PENDENTE DE PREENCHIMENTO)
   if (userDoc?.estado === 'pendente_candidatura') {
     return (
-      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
         <div className="max-w-xl w-full bg-[#121418] border border-neutral-800 rounded-2xl p-8 space-y-6">
           <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
             <h1 className="text-xl font-black text-white">FORMULÁRIO DE CANDIDATURA</h1>
@@ -400,6 +408,37 @@ export default function App() {
           <button onClick={handleLogout} className="w-full bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold py-3 rounded-xl text-xs uppercase border border-neutral-800 transition">
             Encerrar Sessão
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // TELA 3: TELA DE REJEIÇÃO / REPROVAÇÃO (COM OPÇÃO DE TENTAR NOVAMENTE)
+  if (userDoc?.estado === 'rejeitado') {
+    return (
+      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
+        <div className="max-w-md w-full bg-[#121418] border border-red-600/40 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
+          <div className="w-20 h-20 bg-red-600/10 border border-red-600/40 text-red-500 rounded-full mx-auto flex items-center justify-center text-4xl">
+            ❌
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl font-black text-red-500 uppercase tracking-wider">CANDIDATURA REJEITADA</h1>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Infelizmente a tua candidatura não foi aprovada pela administração neste momento. Podes rever os teus dados e tentar novamente.
+            </p>
+          </div>
+          <div className="p-4 bg-red-950/20 border border-red-900/40 rounded-xl text-left space-y-1">
+            <p className="text-[11px] text-neutral-400"><strong>Utilizador:</strong> {userDoc?.username}</p>
+            <p className="text-[11px] text-red-400 font-bold mt-1">Estado: Candidatura Recusada</p>
+          </div>
+          <div className="space-y-3">
+            <button onClick={handleTentarNovamente} className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">
+              🔄 Tentar Novamente
+            </button>
+            <button onClick={handleLogout} className="w-full bg-neutral-900 hover:bg-neutral-800 text-neutral-400 font-bold py-3 rounded-xl text-xs uppercase border border-neutral-800 transition">
+              Encerrar Sessão
+            </button>
+          </div>
         </div>
       </div>
     );
