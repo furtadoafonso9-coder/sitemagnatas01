@@ -177,8 +177,8 @@ export default function App() {
   };
 
   const userRoles = userDoc?.roles || [];
-  const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER") || userRoles.includes("01 DEV");
-  const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader´s") || userRoles.includes("STAFF ATHOS PVP");
+  const isFounder = userRoles.includes("01 Founder´s") || userRoles.includes("OWNER");
+  const isSupport = isFounder || userRoles.includes("SUPORT") || userRoles.includes("01 Leader´s") || userRoles.includes("01 DEV") || userRoles.includes("STAFF ATHOS PVP");
 
   const handleFileUpload = (e, callback) => {
     const file = e.target.files[0];
@@ -200,30 +200,12 @@ export default function App() {
     alert("Perfil atualizado com sucesso!");
   };
 
-  // CANDIDATURA COM ATUALIZAÇÃO IMEDIATA DO ESTADO
+  // Candidatura
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
-      setUserDoc(prev => ({ ...prev, ...formCandidatura, estado: 'pendente_analise' }));
-      await addLog("Candidatura", `Submeteu candidatura in-game como ${formCandidatura.nomeInGame}`);
-    } catch (err) {
-      alert("Erro ao submeter candidatura: " + err.message);
-    }
-  };
-
-  // REINICIAR CANDIDATURA (TENTAR NOVAMENTE APÓS REJEIÇÃO)
-  const handleTentarNovamente = async () => {
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { estado: 'pendente_candidatura' });
-      setUserDoc(prev => ({ ...prev, estado: 'pendente_candidatura' }));
-      setFormCandidatura({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
-      await addLog("Candidatura", `Solicitou uma nova tentativa de candidatura.`);
-    } catch (err) {
-      alert("Erro ao reiniciar candidatura: " + err.message);
-    }
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
+    alert("Candidatura submetida!");
   };
 
   const handleAprovarCandidatura = async (targetUser) => {
@@ -234,6 +216,32 @@ export default function App() {
   const handleReprovarCandidatura = async (targetUser) => {
     await updateDoc(doc(db, 'users', targetUser.id), { estado: 'rejeitado' });
     await addLog("Reprovação", `Reprovou a candidatura de ${targetUser.username}`);
+  };
+
+  // Kick do Membro do Painel
+  const handleKickMembro = async (targetUser) => {
+    if (!isSupport) return;
+    const motivoKick = prompt(`Motivo do kick para ${targetUser.username}:`, "Violação de regras do painel");
+    if (!motivoKick) return;
+
+    const avisoKick = {
+      id: Date.now(),
+      tipo: "Kick do Painel",
+      tempo: "Imediato",
+      motivo: motivoKick,
+      aplicadoPor: user.username,
+      data: new Date().toLocaleDateString()
+    };
+
+    const punicoesAtuais = targetUser.punicoes || [];
+
+    await updateDoc(doc(db, 'users', targetUser.id), {
+      estado: 'kicked',
+      punicoes: [...punicoesAtuais, avisoKick]
+    });
+
+    await addLog("Kick", `Kikou ${targetUser.username} do painel. Motivo: ${motivoKick}`);
+    alert(`Membro ${targetUser.username} kikado com sucesso e perdeu acesso ao painel!`);
   };
 
   // Roupas
@@ -268,23 +276,18 @@ export default function App() {
   // Regras
   const handleAddRegra = async (e) => {
     e.preventDefault();
-    if (!isFounder) return alert("Apenas o Owner pode gerir regras!");
-    await addDoc(collection(db, 'regras'), { 
-      ...formRegra, 
-      ordem: Number(formRegra.ordem) || (regras.length + 1) 
-    });
-    setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 2 });
+    if (!isFounder) return;
+    await addDoc(collection(db, 'regras'), { ...formRegra, ordem: Number(formRegra.ordem) });
+    setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 1 });
     await addLog("Regras", `Adicionou a regra: ${formRegra.titulo}`);
-    alert("Regra publicada com sucesso!");
   };
 
   const handleDeleteRegra = async (id) => {
     if (!isFounder) return;
     await deleteDoc(doc(db, 'regras', id));
-    await addLog("Regras", "Eliminou uma regra do servidor");
   };
 
-  // Punições & Revogações (Unban)
+  // Punições & Revogações
   const handleAplicarPunicao = async (e) => {
     e.preventDefault();
     if (!formPunicao.targetUserId) return alert("Seleciona um membro!");
@@ -315,10 +318,10 @@ export default function App() {
   };
 
   const handleRevogarBan = async (targetUser) => {
-    if (!isSupport) return alert("Sem permissão para revogar banimentos!");
+    if (!isSupport) return;
     await updateDoc(doc(db, 'users', targetUser.id), { estado: 'aprovado' });
-    alert(`O banimento de ${targetUser.username} foi revogado com sucesso!`);
-    await addLog("Unban", `Revogou o banimento de ${targetUser.username}`);
+    alert(`O acesso de ${targetUser.username} foi reativado!`);
+    await addLog("Unban", `Reativou o acesso de ${targetUser.username}`);
   };
 
   const handleToggleRole = async (targetId, roleName) => {
@@ -329,7 +332,6 @@ export default function App() {
     await updateDoc(doc(db, 'users', targetId), { roles: updated });
   };
 
-  // TELA DE AUTENTICAÇÃO
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0a0b0d] text-gray-100 flex flex-col justify-center items-center p-6 font-sans">
@@ -359,86 +361,46 @@ export default function App() {
     );
   }
 
-  // TELA 1: FORMULÁRIO DE CANDIDATURA (PENDENTE DE PREENCHIMENTO)
-  if (userDoc?.estado === 'pendente_candidatura') {
+  // Se o utilizador foi kikado ou está pendente
+  if (userDoc?.estado === 'pendente_candidatura' || userDoc?.estado === 'kicked' || userDoc?.estado === 'rejeitado' || userDoc?.estado === 'banido') {
     return (
-      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
+      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center">
         <div className="max-w-xl w-full bg-[#121418] border border-neutral-800 rounded-2xl p-8 space-y-6">
           <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
-            <h1 className="text-xl font-black text-white">FORMULÁRIO DE CANDIDATURA</h1>
+            <h1 className="text-xl font-black text-red-500">
+              {userDoc?.estado === 'kicked' ? '⚠️ FOSTE KIKADO DO PAINEL' : userDoc?.estado === 'banido' ? '🚫 CONTA BANIDA' : 'FORMULÁRIO DE CANDIDATURA'}
+            </h1>
             <button onClick={handleLogout} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-xl">Sair</button>
           </div>
-          <form onSubmit={handleSubmitCandidatura} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <input type="text" placeholder="Idade" value={formCandidatura.idade} onChange={e => setFormCandidatura({...formCandidatura, idade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-              <input type="text" placeholder="Nome In-Game" value={formCandidatura.nomeInGame} onChange={e => setFormCandidatura({...formCandidatura, nomeInGame: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <input type="number" placeholder="ID In-Game" value={formCandidatura.idInGame} onChange={e => setFormCandidatura({...formCandidatura, idInGame: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-              <input type="number" placeholder="Kills Atuais" value={formCandidatura.killsAtual} onChange={e => setFormCandidatura({...formCandidatura, killsAtual: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
-              <input type="text" placeholder="Tempo de Cidade" value={formCandidatura.tempoCidade} onChange={e => setFormCandidatura({...formCandidatura, tempoCidade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
-            </div>
-            <textarea placeholder="Motivo de entrada..." value={formCandidatura.motivo} onChange={e => setFormCandidatura({...formCandidatura, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Submeter Candidatura</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
 
-  // TELA 2: TELA DE AGUARDE (PENDENTE DE ANÁLISE PELA STAFF/OWNER)
-  if (userDoc?.estado === 'pendente_analise') {
-    return (
-      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
-        <div className="max-w-md w-full bg-[#121418] border border-amber-500/30 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-20 h-20 bg-amber-500/10 border border-amber-500/30 text-amber-500 rounded-full mx-auto flex items-center justify-center text-4xl animate-pulse">
-            ⏳
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-xl font-black text-white uppercase tracking-wider">CANDIDATURA EM ANÁLISE</h1>
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              A tua candidatura foi recebida com sucesso! Por favor aguarda enquanto a administração avalia o teu pedido.
-            </p>
-          </div>
-          <div className="p-4 bg-neutral-900/80 border border-neutral-800 rounded-xl text-left space-y-1">
-            <p className="text-[11px] text-neutral-400"><strong>In-Game:</strong> {userDoc?.nomeInGame || 'N/A'}</p>
-            <p className="text-[11px] text-neutral-400"><strong>ID:</strong> {userDoc?.idInGame || 'N/A'}</p>
-            <p className="text-[11px] text-amber-400 font-bold mt-2">Estado: Pendente de Aprovação</p>
-          </div>
-          <button onClick={handleLogout} className="w-full bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold py-3 rounded-xl text-xs uppercase border border-neutral-800 transition">
-            Encerrar Sessão
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // TELA 3: TELA DE REJEIÇÃO / REPROVAÇÃO (COM OPÇÃO DE TENTAR NOVAMENTE)
-  if (userDoc?.estado === 'rejeitado') {
-    return (
-      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
-        <div className="max-w-md w-full bg-[#121418] border border-red-600/40 rounded-2xl p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-20 h-20 bg-red-600/10 border border-red-600/40 text-red-500 rounded-full mx-auto flex items-center justify-center text-4xl">
-            ❌
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-xl font-black text-red-500 uppercase tracking-wider">CANDIDATURA REJEITADA</h1>
-            <p className="text-xs text-neutral-400 leading-relaxed">
-              Infelizmente a tua candidatura não foi aprovada pela administração neste momento. Podes rever os teus dados e tentar novamente.
-            </p>
-          </div>
-          <div className="p-4 bg-red-950/20 border border-red-900/40 rounded-xl text-left space-y-1">
-            <p className="text-[11px] text-neutral-400"><strong>Utilizador:</strong> {userDoc?.username}</p>
-            <p className="text-[11px] text-red-400 font-bold mt-1">Estado: Candidatura Recusada</p>
-          </div>
-          <div className="space-y-3">
-            <button onClick={handleTentarNovamente} className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">
-              🔄 Tentar Novamente
-            </button>
-            <button onClick={handleLogout} className="w-full bg-neutral-900 hover:bg-neutral-800 text-neutral-400 font-bold py-3 rounded-xl text-xs uppercase border border-neutral-800 transition">
-              Encerrar Sessão
-            </button>
-          </div>
+          {userDoc?.estado === 'kicked' ? (
+            <div className="space-y-4 text-center py-6">
+              <p className="text-xs text-neutral-300">Foste removido (kikado) do painel por um membro da staff/suporte.</p>
+              {userDoc?.punicoes && userDoc.punicoes.length > 0 && (
+                <div className="bg-neutral-900 p-4 rounded-xl border border-red-900/50 text-left space-y-1">
+                  <span className="text-[10px] text-red-400 font-bold uppercase">Último Aviso / Motivo:</span>
+                  <p className="text-xs text-white">{userDoc.punicoes[userDoc.punicoes.length - 1].motivo}</p>
+                </div>
+              )}
+              <p className="text-[10px] text-neutral-500">Contacta a liderança se achas que isto é um engano.</p>
+            </div>
+          ) : userDoc?.estado === 'pendente_candidatura' ? (
+            <form onSubmit={handleSubmitCandidatura} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <input type="text" placeholder="Idade" value={formCandidatura.idade} onChange={e => setFormCandidatura({...formCandidatura, idade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                <input type="text" placeholder="Nome In-Game" value={formCandidatura.nomeInGame} onChange={e => setFormCandidatura({...formCandidatura, nomeInGame: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <input type="number" placeholder="ID In-Game" value={formCandidatura.idInGame} onChange={e => setFormCandidatura({...formCandidatura, idInGame: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                <input type="number" placeholder="Kills Atuais" value={formCandidatura.killsAtual} onChange={e => setFormCandidatura({...formCandidatura, killsAtual: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+                <input type="text" placeholder="Tempo de Cidade" value={formCandidatura.tempoCidade} onChange={e => setFormCandidatura({...formCandidatura, tempoCidade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+              </div>
+              <textarea placeholder="Motivo de entrada..." value={formCandidatura.motivo} onChange={e => setFormCandidatura({...formCandidatura, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Submeter Candidatura</button>
+            </form>
+          ) : (
+            <div className="text-center py-6 text-xs text-neutral-400">O teu estado atual é: <strong>{userDoc?.estado}</strong></div>
+          )}
         </div>
       </div>
     );
@@ -451,13 +413,13 @@ export default function App() {
     if (subTabBase === 'ativos') return m.estado === 'aprovado' && !m.ausente;
     if (subTabBase === 'destaque') return m.destacado;
     if (subTabBase === 'ausentes') return m.ausente === true;
-    if (subTabBase === 'banidos') return m.estado === 'banido' || m.estado === 'rejeitado';
+    if (subTabBase === 'banidos') return m.estado === 'banido' || m.estado === 'rejeitado' || m.estado === 'kicked';
     return true;
   });
 
   return (
     <div className="min-h-screen bg-[#0d0e12] text-gray-200 font-sans flex relative">
-      {/* SIDEBAR DE NAVEGAÇÃO */}
+      {/* SIDEBAR */}
       <aside className="w-64 bg-[#121418] border-r border-neutral-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
         <div>
           <div className="p-5 border-b border-neutral-800/60 flex items-center gap-3">
@@ -484,7 +446,7 @@ export default function App() {
         )}
       </aside>
 
-      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
+      {/* ÁREA DE CONTEÚDO */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-neutral-800/80 bg-[#121418] px-8 flex justify-between items-center sticky top-0 z-30">
           <h1 className="font-black text-sm uppercase tracking-wider text-red-600">MAGNATAS 01! &bull; {currentView.toUpperCase()}</h1>
@@ -500,7 +462,7 @@ export default function App() {
                 <button onClick={() => setSubTabBase('ativos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'ativos' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>👥 Ativos ({usersList.filter(u => u.estado === 'aprovado' && !u.ausente).length})</button>
                 <button onClick={() => setSubTabBase('destaque')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'destaque' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⭐ Em Destaque ({usersList.filter(u => u.destacado).length})</button>
                 <button onClick={() => setSubTabBase('ausentes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'ausentes' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>💤 Ausentes ({usersList.filter(u => u.ausente).length})</button>
-                <button onClick={() => setSubTabBase('banidos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'banidos' ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-neutral-900 text-neutral-400'}`}>🚫 Banidos ({usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado').length})</button>
+                <button onClick={() => setSubTabBase('banidos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'banidos' ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-neutral-900 text-neutral-400'}`}>🚫 Inativos / Ban / Kick ({usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado' || u.estado === 'kicked').length})</button>
               </div>
 
               <input type="text" placeholder="Pesquisar membros..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#121418] border border-neutral-800 px-4 py-3 rounded-xl text-xs text-white" />
@@ -513,6 +475,7 @@ export default function App() {
                       <th className="p-4">ID In-Game</th>
                       <th className="p-4">Estado</th>
                       <th className="p-4">Cargos</th>
+                      {isSupport && <th className="p-4 text-center">Ações Admin</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-800/60">
@@ -532,6 +495,15 @@ export default function App() {
                             {(m.roles || []).map(r => <span key={r} className="px-2 py-0.5 rounded bg-neutral-900 text-[10px] text-neutral-300">{r}</span>)}
                           </div>
                         </td>
+                        {isSupport && (
+                          <td className="p-4 text-center">
+                            {m.estado === 'aprovado' && (
+                              <button onClick={() => handleKickMembro(m)} className="bg-red-950/80 hover:bg-red-900 text-red-400 border border-red-800 px-3 py-1.5 rounded-lg font-bold text-[10px]">
+                                🥾 Kick do Painel
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -617,10 +589,9 @@ export default function App() {
           {currentView === 'regras' && (
             <div className="space-y-6">
               <h2 className="text-xl font-black text-white">Regras Oficiais do Servidor</h2>
-              
               {isFounder && (
                 <form onSubmit={handleAddRegra} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar / Publicar Nova Regra (Apenas Owner)</h3>
+                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Nova Regra (Apenas Owner)</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <input type="text" placeholder="Título da Regra" value={formRegra.titulo} onChange={e => setFormRegra({...formRegra, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
                     <input type="number" placeholder="Ordem de Exibição" value={formRegra.ordem} onChange={e => setFormRegra({...formRegra, ordem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
@@ -631,23 +602,19 @@ export default function App() {
               )}
 
               <div className="space-y-4">
-                {regras.length === 0 ? (
-                  <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl text-center text-neutral-500 text-xs">Ainda não existem regras publicadas.</div>
-                ) : (
-                  regras.map((r, i) => (
-                    <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start space-x-4">
-                      <div className="space-y-1">
-                        <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
-                        <p className="text-xs text-neutral-300 leading-relaxed">{r.descricao}</p>
-                      </div>
-                      {isFounder && (
-                        <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900 shrink-0">
-                          Remover
-                        </button>
-                      )}
+                {regras.map((r, i) => (
+                  <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start space-x-4">
+                    <div className="space-y-1">
+                      <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
+                      <p className="text-xs text-neutral-300 leading-relaxed">{r.descricao}</p>
                     </div>
-                  ))
-                )}
+                    {isFounder && (
+                      <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900 shrink-0">
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -732,7 +699,7 @@ export default function App() {
               <div className="flex gap-2 border-b border-neutral-800 pb-4 overflow-x-auto">
                 <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⏳ Candidaturas</button>
                 <button onClick={() => setAdminTab('cargos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'cargos' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>🎖️ Gestão de Cargos</button>
-                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Aplicar Punições / Revogar Ban</button>
+                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Punições & Kicks / Unban</button>
                 <button onClick={() => setAdminTab('logs')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'logs' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📜 Logs</button>
               </div>
 
@@ -800,7 +767,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* GESTÃO DE PUNIÇÕES & REVOGAÇÃO DE BANIMENTOS */}
               {adminTab === 'punicoes' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <form onSubmit={handleAplicarPunicao} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4">
@@ -821,23 +787,23 @@ export default function App() {
                     <button type="submit" className="w-full bg-red-600 text-white font-bold py-3.5 rounded-xl text-xs uppercase">Aplicar Punição</button>
                   </form>
 
-                  {/* SUB-PAINEL DE REVOGAR BANIMENTOS (UNBAN) */}
+                  {/* REVOGAR BANIMENTOS / KICKS */}
                   <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4">
-                    <h3 className="text-sm font-black text-emerald-400 uppercase">Revogar Banimentos (Unban)</h3>
-                    <p className="text-xs text-neutral-400">Lista de utilizadores atualmente banidos ou rejeitados:</p>
+                    <h3 className="text-sm font-black text-emerald-400 uppercase">Restaurar Acesso (Unban / Unkick)</h3>
+                    <p className="text-xs text-neutral-400">Utilizadores banidos, rejeitados ou kikados:</p>
                     
                     <div className="space-y-3 max-h-80 overflow-y-auto">
-                      {usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado').length === 0 ? (
-                        <div className="text-xs text-neutral-500 bg-neutral-900/60 p-4 rounded-xl text-center">Nenhum membro atualmente banido.</div>
+                      {usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado' || u.estado === 'kicked').length === 0 ? (
+                        <div className="text-xs text-neutral-500 bg-neutral-900/60 p-4 rounded-xl text-center">Nenhum membro com restrições de acesso.</div>
                       ) : (
-                        usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado').map(banned => (
-                          <div key={banned.id} className="bg-neutral-900 p-4 rounded-xl flex justify-between items-center border border-neutral-800">
+                        usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado' || u.estado === 'kicked').map(restricted => (
+                          <div key={restricted.id} className="bg-neutral-900 p-4 rounded-xl flex justify-between items-center border border-neutral-800">
                             <div>
-                              <h4 className="font-bold text-white text-xs">{banned.nomeInGame || banned.username}</h4>
-                              <span className="text-[10px] text-red-400 uppercase font-bold">Estado: {banned.estado}</span>
+                              <h4 className="font-bold text-white text-xs">{restricted.nomeInGame || restricted.username}</h4>
+                              <span className="text-[10px] text-red-400 uppercase font-bold">Estado: {restricted.estado}</span>
                             </div>
-                            <button onClick={() => handleRevogarBan(banned)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg uppercase">
-                              Revogar Ban
+                            <button onClick={() => handleRevogarBan(restricted)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg uppercase">
+                              Restaurar Acesso
                             </button>
                           </div>
                         ))
