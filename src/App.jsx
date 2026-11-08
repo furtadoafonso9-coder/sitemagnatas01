@@ -205,7 +205,12 @@ export default function App() {
     e.preventDefault();
     const userRef = doc(db, 'users', user.uid);
     await updateDoc(userRef, { ...formCandidatura, estado: 'pendente_analise' });
-    alert("Candidatura submetida!");
+    alert("Candidatura submetida com sucesso!");
+  };
+
+  const handleResetCandidatura = async () => {
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, { estado: 'pendente_candidatura' });
   };
 
   const handleAprovarCandidatura = async (targetUser) => {
@@ -218,7 +223,7 @@ export default function App() {
     await addLog("Reprovação", `Reprovou a candidatura de ${targetUser.username}`);
   };
 
-  // Kick do Membro do Painel
+  // Kick do Membro
   const handleKickMembro = async (targetUser) => {
     if (!isSupport) return;
     const motivoKick = prompt(`Motivo do kick para ${targetUser.username}:`, "Violação de regras do painel");
@@ -241,7 +246,7 @@ export default function App() {
     });
 
     await addLog("Kick", `Kikou ${targetUser.username} do painel. Motivo: ${motivoKick}`);
-    alert(`Membro ${targetUser.username} kikado com sucesso e perdeu acesso ao painel!`);
+    alert(`Membro ${targetUser.username} kikado com sucesso!`);
   };
 
   // Roupas
@@ -361,30 +366,75 @@ export default function App() {
     );
   }
 
-  // Se o utilizador foi kikado ou está pendente
-  if (userDoc?.estado === 'pendente_candidatura' || userDoc?.estado === 'kicked' || userDoc?.estado === 'rejeitado' || userDoc?.estado === 'banido') {
+  // BLOQUEIO DE CANDIDATURA, REJEIÇÃO, BAN E KICK
+  if (userDoc?.estado === 'pendente_candidatura' || userDoc?.estado === 'pendente_analise' || userDoc?.estado === 'rejeitado' || userDoc?.estado === 'kicked' || userDoc?.estado === 'banido') {
     return (
-      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center">
-        <div className="max-w-xl w-full bg-[#121418] border border-neutral-800 rounded-2xl p-8 space-y-6">
+      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
+        <div className="max-w-xl w-full bg-[#121418] border border-neutral-800 rounded-2xl p-8 space-y-6 shadow-2xl">
           <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
-            <h1 className="text-xl font-black text-red-500">
-              {userDoc?.estado === 'kicked' ? '⚠️ FOSTE KIKADO DO PAINEL' : userDoc?.estado === 'banido' ? '🚫 CONTA BANIDA' : 'FORMULÁRIO DE CANDIDATURA'}
+            <h1 className="text-xl font-black text-white uppercase tracking-wide">
+              {userDoc?.estado === 'pendente_analise' && '⏳ CANDIDATURA EM ANÁLISE'}
+              {userDoc?.estado === 'rejeitado' && '❌ CANDIDATURA REJEITADA'}
+              {userDoc?.estado === 'kicked' && '⚠️ REMOVIDO DO PAINEL'}
+              {userDoc?.estado === 'banido' && '🚫 CONTA BANIDA'}
+              {userDoc?.estado === 'pendente_candidatura' && 'FORMULÁRIO DE CANDIDATURA'}
             </h1>
-            <button onClick={handleLogout} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-xl">Sair</button>
+            <button onClick={handleLogout} className="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded-xl font-bold hover:bg-red-900 transition">Sair</button>
           </div>
 
-          {userDoc?.estado === 'kicked' ? (
+          {/* EMBED 1: PENDENTE ANÁLISE */}
+          {userDoc?.estado === 'pendente_analise' && (
             <div className="space-y-4 text-center py-6">
-              <p className="text-xs text-neutral-300">Foste removido (kikado) do painel por um membro da staff/suporte.</p>
+              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 text-amber-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black">
+                ⏳
+              </div>
+              <h2 className="text-lg font-black text-white">A tua candidatura foi submetida!</h2>
+              <p className="text-xs text-neutral-400 max-w-md mx-auto leading-relaxed">
+                A tua candidatura está a ser analisada pela Staff / Suporte dos Magnatas 01!. Aguarda aprovação para teres acesso ao painel principal.
+              </p>
+            </div>
+          )}
+
+          {/* EMBED 2: CANDIDATURA REJEITADA (COM OPÇÃO DE TENTAR NOVAMENTE) */}
+          {userDoc?.estado === 'rejeitado' && (
+            <div className="space-y-6 text-center py-4">
+              <div className="bg-red-950/40 border border-red-800/80 p-6 rounded-2xl space-y-3 text-left">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">❌</span>
+                  <div>
+                    <h3 className="text-sm font-black text-red-400 uppercase">Candidatura Rejeitada</h3>
+                    <p className="text-[11px] text-neutral-400">Não foste aprovado nesta tentativa.</p>
+                  </div>
+                </div>
+                <p className="text-xs text-neutral-300 pt-2 border-t border-neutral-800/80">
+                  A tua candidatura não preencheu todos os requisitos necessários no momento. Revisa as tuas informações e podes tentar novamente!
+                </p>
+              </div>
+              <button 
+                onClick={handleResetCandidatura}
+                className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition flex items-center justify-center gap-2"
+              >
+                <span>🔄</span> Tentar Novamente (Preencher Nova Candidatura)
+              </button>
+            </div>
+          )}
+
+          {/* EMBED 3: KICKED */}
+          {userDoc?.estado === 'kicked' && (
+            <div className="space-y-4 text-center py-4">
+              <div className="w-16 h-16 bg-red-600/10 border border-red-600/30 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black">🥾</div>
+              <p className="text-xs text-neutral-300">Foste removido (kikado) do painel por um membro da Suporte/Staff.</p>
               {userDoc?.punicoes && userDoc.punicoes.length > 0 && (
                 <div className="bg-neutral-900 p-4 rounded-xl border border-red-900/50 text-left space-y-1">
-                  <span className="text-[10px] text-red-400 font-bold uppercase">Último Aviso / Motivo:</span>
+                  <span className="text-[10px] text-red-400 font-bold uppercase">Motivo do Kick:</span>
                   <p className="text-xs text-white">{userDoc.punicoes[userDoc.punicoes.length - 1].motivo}</p>
                 </div>
               )}
-              <p className="text-[10px] text-neutral-500">Contacta a liderança se achas que isto é um engano.</p>
             </div>
-          ) : userDoc?.estado === 'pendente_candidatura' ? (
+          )}
+
+          {/* EMBED 4: FORMULÁRIO DE CANDIDATURA INICIAL */}
+          {userDoc?.estado === 'pendente_candidatura' && (
             <form onSubmit={handleSubmitCandidatura} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <input type="text" placeholder="Idade" value={formCandidatura.idade} onChange={e => setFormCandidatura({...formCandidatura, idade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
@@ -396,10 +446,8 @@ export default function App() {
                 <input type="text" placeholder="Tempo de Cidade" value={formCandidatura.tempoCidade} onChange={e => setFormCandidatura({...formCandidatura, tempoCidade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
               </div>
               <textarea placeholder="Motivo de entrada..." value={formCandidatura.motivo} onChange={e => setFormCandidatura({...formCandidatura, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Submeter Candidatura</button>
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">Submeter Candidatura</button>
             </form>
-          ) : (
-            <div className="text-center py-6 text-xs text-neutral-400">O teu estado atual é: <strong>{userDoc?.estado}</strong></div>
           )}
         </div>
       </div>
