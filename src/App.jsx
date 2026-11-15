@@ -51,6 +51,9 @@ export default function App() {
   const [avisosStaff, setAvisosStaff] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRoleModalUser, setActiveRoleModalUser] = useState(null);
+  
+  // Modal de Revogação de Castigo Avançado
+  const [modalRevocar, setModalRevocar] = useState(null); // { targetUser, punicaoId }
 
   // Forms
   const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', discordTag: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
@@ -60,6 +63,7 @@ export default function App() {
   const [formRadio, setFormRadio] = useState({ titulo: '', frequencia: '', info: '' });
   const [formAviso, setFormAviso] = useState({ titulo: '', mensagem: '', importancia: 'Normal' });
   const [formPunicao, setFormPunicao] = useState({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
+  const [formNota, setFormNota] = useState({ targetUserId: '', texto: '' });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('magnatas_email_user');
@@ -164,7 +168,8 @@ export default function App() {
           roles: ["01 Member´s", "HOMEM"],
           destacado: false,
           ausente: false,
-          punicoes: []
+          punicoes: [],
+          notasInternas: []
         };
         await setDoc(userRef, newUser);
         setUser(newUser); setUserDoc(newUser);
@@ -231,7 +236,6 @@ export default function App() {
     await addLog("Reprovação", `Reprovou a candidatura de ${targetUser.username}`);
   };
 
-  // Kick do Membro (Transforma em Ex-Membro)
   const handleKickMembro = async (targetUser) => {
     if (!isSupport) return;
     const motivoKick = prompt(`Motivo do kick para ${targetUser.username}:`, "Reestruturação / Inatividade");
@@ -253,8 +257,31 @@ export default function App() {
       punicoes: [...punicoesAtuais, avisoKick]
     });
 
-    await addLog("Kick", `Kikou ${targetUser.username} da gang (passou a ex-membro). Motivo: ${motivoKick}`);
-    alert(`Membro ${targetUser.username} kikado e transferido para ex-membros!`);
+    await addLog("Kick", `Kikou ${targetUser.username} da gang. Motivo: ${motivoKick}`);
+    alert(`Membro ${targetUser.username} transferido para ex-membros!`);
+  };
+
+  // Notas Internas
+  const handleAdicionarNota = async (e) => {
+    e.preventDefault();
+    if (!isSupport || !formNota.targetUserId || !formNota.texto) return;
+    const target = usersList.find(u => u.id === formNota.targetUserId);
+    if (!target) return;
+
+    const novaNota = {
+      id: Date.now(),
+      texto: formNota.texto,
+      autor: user.username,
+      data: new Date().toLocaleString()
+    };
+
+    const notasAtuais = target.notasInternas || [];
+    await updateDoc(doc(db, 'users', target.id), {
+      notasInternas: [...notasAtuais, novaNota]
+    });
+
+    setFormNota({ targetUserId: '', texto: '' });
+    alert("Nota interna adicionada com sucesso!");
   };
 
   // Roupas
@@ -318,7 +345,7 @@ export default function App() {
     await deleteDoc(doc(db, 'avisos_staff', id));
   };
 
-  // Punições & Revogações
+  // Punições & Revogações com Escolha
   const handleAplicarPunicao = async (e) => {
     e.preventDefault();
     if (!formPunicao.targetUserId) return alert("Seleciona um membro!");
@@ -348,21 +375,28 @@ export default function App() {
     setFormPunicao({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
   };
 
-  const handleRevogarPunicao = async (targetUserId, punicaoId) => {
-    if (!isSupport) return;
-    const target = usersList.find(u => u.id === targetUserId);
-    if (!target) return;
+  const executarRevogacao = async (acaoDestino) => {
+    if (!modalRevocar) return;
+    const { targetUser, punicaoId } = modalRevocar;
 
-    const novasPunicoes = (target.punicoes || []).filter(p => p.id !== punicaoId);
-    let novoEstado = target.estado;
-    if (target.estado === 'banido') novoEstado = 'aprovado';
+    if (punicaoId === 'BAN_OU_ESTADO') {
+      const novoEstado = acaoDestino === 'entrar' ? 'aprovado' : 'pendente_candidatura';
+      await updateDoc(doc(db, 'users', targetUser.id), { estado: novoEstado });
+      await addLog("Revogação", `Revogou estado de ${targetUser.username} (${acaoDestino === 'entrar' ? 'Entrou diretamente' : 'Fez nova candidatura'})`);
+    } else {
+      const novasPunicoes = (targetUser.punicoes || []).filter(p => p.id !== punicaoId);
+      let novoEstado = targetUser.estado;
+      if (acaoDestino === 'entrar' && targetUser.estado === 'banido') novoEstado = 'aprovado';
+      
+      await updateDoc(doc(db, 'users', targetUser.id), {
+        punicoes: novasPunicoes,
+        estado: novoEstado
+      });
+      await addLog("Revogação", `Removeu castigo de ${targetUser.username}`);
+    }
 
-    await updateDoc(doc(db, 'users', target.id), {
-      punicoes: novasPunicoes,
-      estado: novoEstado
-    });
-    alert("Castigo / Punição revogado com sucesso!");
-    await addLog("Revogação", `Removeu castigo/ban de ${target.username}`);
+    setModalRevocar(null);
+    alert("Castigo revogado com sucesso!");
   };
 
   const handleToggleRole = async (targetId, roleName) => {
@@ -401,6 +435,9 @@ export default function App() {
       </div>
     );
   }
+
+  // TELA DE BOAS-VINDAS E TUTORIAL RÁPIDO PARA APROVADOS RECENTES (QUANDO CLICAM EM CONTINUAR)
+  // Se o estado é 'aprovado', deixamos entrar mas podemos mostrar um banner de boas-vindas se necessário.
 
   // BLOQUEIO DE CANDIDATURA, ANÁLISE, REJEIÇÃO, BAN OU EX-MEMBRO
   if (userDoc?.estado === 'pendente_candidatura' || userDoc?.estado === 'pendente_analise' || userDoc?.estado === 'rejeitado' || userDoc?.estado === 'ex_membro' || userDoc?.estado === 'banido') {
@@ -501,6 +538,40 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#07080a] text-zinc-200 font-sans flex relative selection:bg-red-500 selection:text-white">
+      
+      {/* MODAL INTERATIVO PARA REVOGAR CASTIGOS (ESCOLHER ENTRE CANDIDATURA OU ENTRAR DIRETAMENTE) */}
+      {modalRevocar && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#101216] border border-zinc-800 p-8 rounded-3xl max-w-md w-full space-y-6 shadow-2xl">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">✨</div>
+              <h3 className="text-base font-black text-white uppercase tracking-wider">Revogar Castigo / Ban</h3>
+              <p className="text-xs text-zinc-400">Escolhe o comportamento para o utilizador <strong>{modalRevocar.targetUser.username}</strong>:</p>
+            </div>
+            <div className="space-y-3">
+              <button 
+                onClick={() => executarRevogacao('entrar')}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
+              >
+                <span>✅</span> Entrar diretamente na Gang
+              </button>
+              <button 
+                onClick={() => executarRevogacao('candidatura')}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-amber-600/20 transition flex items-center justify-center gap-2"
+              >
+                <span>📝</span> Fazer nova candidatura
+              </button>
+              <button 
+                onClick={() => setModalRevocar(null)}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-wider transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SIDEBAR */}
       <aside className="w-72 bg-[#101216] border-r border-zinc-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20 shadow-xl">
         <div>
@@ -856,7 +927,8 @@ export default function App() {
                 <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>⏳ Candidaturas</button>
                 <button onClick={() => setAdminTab('cargos')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'cargos' ? 'bg-amber-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>🎖️ Gestão de Cargos & Kicks</button>
                 <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'punicoes' ? 'bg-red-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>⚠️ Punições & Revogações</button>
-                <button onClick={() => setAdminTab('logs')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'logs' ? 'bg-purple-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>📜 Logs do Sistema</button>
+                <button onClick={() => setAdminTab('notas')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'notas' ? 'bg-indigo-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>📝 Notas Internas</button>
+                <button onClick={() => setAdminTab('logs')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'logs' ? 'bg-purple-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>📜 Logs</button>
               </div>
 
               {adminTab === 'candidaturas' && (
@@ -881,6 +953,7 @@ export default function App() {
                 </div>
               )}
 
+              {/* GESTÃO DE CARGOS - APENAS MEMBROS ATIVOS NA GANG (EXCLUI KIKADOS E BANIDOS) */}
               {adminTab === 'cargos' && (
                 <div className="bg-[#101216] border border-zinc-800/80 rounded-2xl overflow-visible shadow-2xl">
                   <table className="w-full text-left text-xs">
@@ -933,6 +1006,7 @@ export default function App() {
                 </div>
               )}
 
+              {/* REVOGAÇÃO DE PUNIÇÕES (MELHORADA COM LAYOUT LIMPO EM CARTÕES) */}
               {adminTab === 'punicoes' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <form onSubmit={handleAplicarPunicao} className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
@@ -953,42 +1027,87 @@ export default function App() {
                     <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition">Aplicar Punição</button>
                   </form>
 
-                  {/* REVOGAÇÃO DE CASTIGOS & BANS */}
+                  {/* REVOGAÇÃO DE CASTIGOS EM CARTÕES LIMPOS */}
                   <div className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
-                    <h3 className="text-sm font-black text-emerald-400 uppercase tracking-wider">Revogar Castigos, Bans e Avisos</h3>
-                    <p className="text-xs text-zinc-400">Lista de jogadores com castigos ou banimentos ativos:</p>
+                    <h3 className="text-sm font-black text-emerald-400 uppercase tracking-wider">Revogar Castigos, Bans e Ex-Membros</h3>
+                    <p className="text-xs text-zinc-400">Lista de jogadores com restrições ou castigos ativos:</p>
                     
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {usersList.filter(u => (u.punicoes && u.punicoes.length > 0) || u.estado === 'banido').length === 0 ? (
-                        <div className="text-xs text-zinc-500 bg-zinc-900/60 p-6 rounded-xl text-center border border-zinc-800">Nenhum castigo ou banimento registado.</div>
+                    <div className="space-y-4 max-h-[32rem] overflow-y-auto pr-2">
+                      {usersList.filter(u => (u.punicoes && u.punicoes.length > 0) || u.estado === 'banido' || u.estado === 'ex_membro').length === 0 ? (
+                        <div className="text-xs text-zinc-500 bg-zinc-900/60 p-8 rounded-2xl text-center border border-zinc-800">Nenhum castigo ou banimento ativo.</div>
                       ) : (
-                        usersList.filter(u => (u.punicoes && u.punicoes.length > 0) || u.estado === 'banido').map(punished => (
-                          <div key={punished.id} className="bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 space-y-3">
-                            <div className="flex justify-between items-center">
+                        usersList.filter(u => (u.punicoes && u.punicoes.length > 0) || u.estado === 'banido' || u.estado === 'ex_membro').map(punished => (
+                          <div key={punished.id} className="bg-zinc-900/90 p-5 rounded-2xl border border-zinc-800/80 space-y-3 shadow-md">
+                            <div className="flex justify-between items-center border-b border-zinc-800/80 pb-3">
                               <div>
-                                <h4 className="font-black text-white text-xs">{punished.nomeInGame || punished.username}</h4>
-                                <span className="text-[10px] text-red-400 uppercase font-extrabold">Estado: {punished.estado}</span>
+                                <h4 className="font-extrabold text-white text-xs">{punished.nomeInGame || punished.username}</h4>
+                                <span className="text-[10px] text-red-400 uppercase font-black tracking-wider">ESTADO: {punished.estado}</span>
                               </div>
-                              {punished.estado === 'banido' && (
-                                <button onClick={() => handleRevogarPunicao(punished.id, null)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg uppercase shadow-sm transition">
-                                  Desbanir Jogador
-                                </button>
-                              )}
+                              <button 
+                                onClick={() => setModalRevocar({ targetUser: punished, punicaoId: 'BAN_OU_ESTADO' })}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl uppercase tracking-wider shadow-md shadow-emerald-600/20 transition"
+                              >
+                                Revogar Estado
+                              </button>
                             </div>
                             {punished.punicoes && punished.punicoes.length > 0 && (
-                              <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                              <div className="space-y-2 pt-1">
                                 {punished.punicoes.map((p) => (
-                                  <div key={p.id} className="flex justify-between items-center bg-black/40 p-2.5 rounded-lg border border-zinc-800/60 text-[11px]">
+                                  <div key={p.id} className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800 text-[11px]">
                                     <div>
-                                      <strong className="text-red-400">{p.tipo}:</strong> <span className="text-zinc-300">{p.motivo}</span>
+                                      <strong className="text-red-400 uppercase font-black">{p.tipo}:</strong> <span className="text-zinc-300">{p.motivo}</span>
                                     </div>
-                                    <button onClick={() => handleRevogarPunicao(punished.id, p.id)} className="bg-red-950/80 hover:bg-red-900 text-red-400 border border-red-800 px-2.5 py-1 rounded font-bold text-[10px] transition">
+                                    <button 
+                                      onClick={() => setModalRevocar({ targetUser: punished, punicaoId: p.id })}
+                                      className="bg-red-950/80 hover:bg-red-900 text-red-400 border border-red-800/60 px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase transition"
+                                    >
                                       Revogar
                                     </button>
                                   </div>
                                 ))}
                               </div>
                             )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* NOTAS INTERNAS */}
+              {adminTab === 'notas' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <form onSubmit={handleAdicionarNota} className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
+                    <h3 className="text-sm font-black text-indigo-400 uppercase tracking-wider">Adicionar Nota Interna a Membro</h3>
+                    <select value={formNota.targetUserId} onChange={e => setFormNota({...formNota, targetUserId: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-indigo-500 outline-none" required>
+                      <option value="">Seleciona o membro...</option>
+                      {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username} (@{u.username})</option>)}
+                    </select>
+                    <textarea placeholder="Escreve a nota confidencial da staff..." value={formNota.texto} onChange={e => setFormNota({...formNota, texto: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white h-32 focus:border-indigo-500 outline-none resize-none" required></textarea>
+                    <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition">Guardar Nota Interna</button>
+                  </form>
+
+                  <div className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Notas Registadas por Membro</h3>
+                    <div className="space-y-4 max-h-[32rem] overflow-y-auto pr-2">
+                      {usersList.filter(u => u.notasInternas && u.notasInternas.length > 0).length === 0 ? (
+                        <div className="text-xs text-zinc-500 bg-zinc-900/60 p-8 rounded-2xl text-center border border-zinc-800">Sem notas internas registadas.</div>
+                      ) : (
+                        usersList.filter(u => u.notasInternas && u.notasInternas.length > 0).map(u => (
+                          <div key={u.id} className="bg-zinc-900/90 p-5 rounded-2xl border border-zinc-800/80 space-y-3">
+                            <h4 className="font-extrabold text-white text-xs">{u.nomeInGame || u.username}</h4>
+                            <div className="space-y-2">
+                              {u.notasInternas.map(nota => (
+                                <div key={nota.id} className="bg-black/40 p-3 rounded-xl border border-zinc-800 text-[11px] space-y-1">
+                                  <p className="text-zinc-300">{nota.texto}</p>
+                                  <div className="flex justify-between items-center text-[10px] text-zinc-500 pt-1 border-t border-zinc-800/60">
+                                    <span>Staff: <strong className="text-zinc-400">{nota.autor}</strong></span>
+                                    <span>{nota.data}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ))
                       )}
