@@ -14,21 +14,21 @@ import {
 } from 'firebase/firestore';
 
 const ALL_ROLES = [
-  { name: "HOMEM", color: "bg-emerald-900/60 border-emerald-500/40 text-emerald-300" },
-  { name: "STREAMER", color: "bg-pink-900/60 border-pink-500/40 text-pink-300" },
-  { name: "STAFF ATHOS PVP", color: "bg-blue-900/60 border-blue-500/40 text-blue-300" },
-  { name: "SUPORT", color: "bg-cyan-900/60 border-cyan-500/40 text-cyan-300" },
-  { name: "01 DEV", color: "bg-amber-900/60 border-amber-500/40 text-amber-300" },
-  { name: "OWNER", color: "bg-purple-900/60 border-purple-500/40 text-purple-300" },
-  { name: "MULHER", color: "bg-pink-950/80 border-pink-600/40 text-pink-400" },
-  { name: "01 Founder´s", color: "bg-purple-950/80 border-purple-600/50 text-purple-300" },
-  { name: "CONTA ALT", color: "bg-neutral-800 border-neutral-700 text-neutral-300" },
-  { name: "01 Member´s", color: "bg-emerald-950 border-emerald-600/50 text-emerald-400" },
-  { name: "01 Leader´s", color: "bg-amber-950 border-amber-600/50 text-amber-400" },
-  { name: "Resp. Manager´s", color: "bg-blue-950 border-blue-600/50 text-blue-400" },
-  { name: "Resp. Member´s", color: "bg-teal-950 border-teal-600/50 text-teal-400" },
-  { name: "01 Visitant", color: "bg-amber-900/50 border-amber-700 text-amber-300" },
-  { name: "PVP Player", color: "bg-teal-900/50 border-teal-700 text-teal-300" }
+  { name: "HOMEM", color: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" },
+  { name: "STREAMER", color: "bg-pink-500/10 border-pink-500/30 text-pink-400" },
+  { name: "STAFF ATHOS PVP", color: "bg-blue-500/10 border-blue-500/30 text-blue-400" },
+  { name: "SUPORT", color: "bg-cyan-500/10 border-cyan-500/30 text-cyan-400" },
+  { name: "01 DEV", color: "bg-amber-500/10 border-amber-500/30 text-amber-400" },
+  { name: "OWNER", color: "bg-purple-500/10 border-purple-500/30 text-purple-400" },
+  { name: "MULHER", color: "bg-rose-500/10 border-rose-500/30 text-rose-400" },
+  { name: "01 Founder´s", color: "bg-purple-600/10 border-purple-600/30 text-purple-300" },
+  { name: "CONTA ALT", color: "bg-zinc-700/20 border-zinc-700/40 text-zinc-400" },
+  { name: "01 Member´s", color: "bg-emerald-600/10 border-emerald-600/30 text-emerald-300" },
+  { name: "01 Leader´s", color: "bg-amber-600/10 border-amber-600/30 text-amber-300" },
+  { name: "Resp. Manager´s", color: "bg-blue-600/10 border-blue-600/30 text-blue-300" },
+  { name: "Resp. Member´s", color: "bg-teal-600/10 border-teal-600/30 text-teal-300" },
+  { name: "01 Visitant", color: "bg-orange-500/10 border-orange-500/30 text-orange-400" },
+  { name: "PVP Player", color: "bg-indigo-500/10 border-indigo-500/30 text-indigo-400" }
 ];
 
 export default function App() {
@@ -48,15 +48,17 @@ export default function App() {
   const [regras, setRegras] = useState([]);
   const [radiosList, setRadiosList] = useState([]);
   const [logsList, setLogsList] = useState([]);
+  const [avisosStaff, setAvisosStaff] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRoleModalUser, setActiveRoleModalUser] = useState(null);
 
   // Forms
-  const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
+  const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', discordTag: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
   const [formPerfil, setFormPerfil] = useState({ avatar: '', biografia: '' });
   const [formRoupa, setFormRoupa] = useState({ nome: '', numero: '', imagem: '' });
   const [formRegra, setFormRegra] = useState({ titulo: '', descricao: '', ordem: 1 });
   const [formRadio, setFormRadio] = useState({ titulo: '', frequencia: '', info: '' });
+  const [formAviso, setFormAviso] = useState({ titulo: '', mensagem: '', importancia: 'Normal' });
   const [formPunicao, setFormPunicao] = useState({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
 
   useEffect(() => {
@@ -111,6 +113,12 @@ export default function App() {
       snap.forEach(d => reg.push({ id: d.id, ...d.data() }));
       setRegras(reg);
     });
+    const qAvisos = query(collection(db, 'avisos_staff'), orderBy('timestamp', 'desc'));
+    const unsubAvisos = onSnapshot(qAvisos, (snap) => {
+      let avs = [];
+      snap.forEach(d => avs.push({ id: d.id, ...d.data() }));
+      setAvisosStaff(avs);
+    });
     const qLogs = query(collection(db, 'logs'), orderBy('timestamp', 'desc'));
     const unsubLogs = onSnapshot(qLogs, (snap) => {
       let l = [];
@@ -119,7 +127,7 @@ export default function App() {
     });
 
     return () => {
-      unsubUser(); unsubUsers(); unsubRoupas(); unsubRadios(); unsubRegras(); unsubLogs();
+      unsubUser(); unsubUsers(); unsubRoupas(); unsubRadios(); unsubRegras(); unsubAvisos(); unsubLogs();
     };
   }, [user]);
 
@@ -223,15 +231,15 @@ export default function App() {
     await addLog("Reprovação", `Reprovou a candidatura de ${targetUser.username}`);
   };
 
-  // Kick do Membro
+  // Kick do Membro (Transforma em Ex-Membro)
   const handleKickMembro = async (targetUser) => {
     if (!isSupport) return;
-    const motivoKick = prompt(`Motivo do kick para ${targetUser.username}:`, "Violação de regras do painel");
+    const motivoKick = prompt(`Motivo do kick para ${targetUser.username}:`, "Reestruturação / Inatividade");
     if (!motivoKick) return;
 
     const avisoKick = {
       id: Date.now(),
-      tipo: "Kick do Painel",
+      tipo: "Kick da Gang",
       tempo: "Imediato",
       motivo: motivoKick,
       aplicadoPor: user.username,
@@ -241,12 +249,12 @@ export default function App() {
     const punicoesAtuais = targetUser.punicoes || [];
 
     await updateDoc(doc(db, 'users', targetUser.id), {
-      estado: 'kicked',
+      estado: 'ex_membro',
       punicoes: [...punicoesAtuais, avisoKick]
     });
 
-    await addLog("Kick", `Kikou ${targetUser.username} do painel. Motivo: ${motivoKick}`);
-    alert(`Membro ${targetUser.username} kikado com sucesso!`);
+    await addLog("Kick", `Kikou ${targetUser.username} da gang (passou a ex-membro). Motivo: ${motivoKick}`);
+    alert(`Membro ${targetUser.username} kikado e transferido para ex-membros!`);
   };
 
   // Roupas
@@ -292,6 +300,24 @@ export default function App() {
     await deleteDoc(doc(db, 'regras', id));
   };
 
+  // Avisos da Staff
+  const handleAddAvisoStaff = async (e) => {
+    e.preventDefault();
+    if (!isSupport) return;
+    await addDoc(collection(db, 'avisos_staff'), {
+      ...formAviso,
+      autor: user.username,
+      timestamp: new Date().toLocaleString()
+    });
+    setFormAviso({ titulo: '', mensagem: '', importancia: 'Normal' });
+    alert("Aviso publicado com sucesso!");
+  };
+
+  const handleDeleteAviso = async (id) => {
+    if (!isSupport) return;
+    await deleteDoc(doc(db, 'avisos_staff', id));
+  };
+
   // Punições & Revogações
   const handleAplicarPunicao = async (e) => {
     e.preventDefault();
@@ -322,11 +348,21 @@ export default function App() {
     setFormPunicao({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
   };
 
-  const handleRevogarBan = async (targetUser) => {
+  const handleRevogarPunicao = async (targetUserId, punicaoId) => {
     if (!isSupport) return;
-    await updateDoc(doc(db, 'users', targetUser.id), { estado: 'aprovado' });
-    alert(`O acesso de ${targetUser.username} foi reativado!`);
-    await addLog("Unban", `Reativou o acesso de ${targetUser.username}`);
+    const target = usersList.find(u => u.id === targetUserId);
+    if (!target) return;
+
+    const novasPunicoes = (target.punicoes || []).filter(p => p.id !== punicaoId);
+    let novoEstado = target.estado;
+    if (target.estado === 'banido') novoEstado = 'aprovado';
+
+    await updateDoc(doc(db, 'users', target.id), {
+      punicoes: novasPunicoes,
+      estado: novoEstado
+    });
+    alert("Castigo / Punição revogado com sucesso!");
+    await addLog("Revogação", `Removeu castigo/ban de ${target.username}`);
   };
 
   const handleToggleRole = async (targetId, roleName) => {
@@ -339,25 +375,25 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 flex flex-col justify-center items-center p-6 font-sans">
-        <div className="max-w-md w-full bg-[#121418] border border-neutral-800 rounded-2xl p-8 shadow-2xl space-y-6">
+      <div className="min-h-screen bg-[#07080a] text-zinc-100 flex flex-col justify-center items-center p-6 font-sans">
+        <div className="max-w-md w-full bg-[#101216] border border-zinc-800/80 rounded-2xl p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-2">
-            <div className="w-16 h-16 bg-red-600/10 border border-red-600/30 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black">🛡️</div>
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black shadow-lg">🛡️</div>
             <h1 className="text-2xl font-black tracking-wider text-white">MAGNATAS 01!</h1>
-            <p className="text-xs text-red-500 uppercase font-bold">Portal de Acesso Oficial</p>
+            <p className="text-xs text-red-500 uppercase font-extrabold tracking-widest">Portal de Acesso Oficial</p>
           </div>
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {isRegistering && (
-              <input type="text" placeholder="Nome de Utilizador" value={usernameInput} onChange={e => setUsernameInput(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+              <input type="text" placeholder="Nome de Utilizador" value={usernameInput} onChange={e => setUsernameInput(e.target.value)} className="w-full bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none transition" required />
             )}
-            <input type="email" placeholder="E-mail" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-            <input type="password" placeholder="Palavra-passe" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">
+            <input type="email" placeholder="E-mail" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none transition" required />
+            <input type="password" placeholder="Palavra-passe" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none transition" required />
+            <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition">
               {isRegistering ? 'Criar Conta' : 'Iniciar Sessão'}
             </button>
           </form>
           <div className="text-center">
-            <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-xs text-neutral-400 hover:text-red-500 font-semibold cursor-pointer">
+            <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-xs text-zinc-400 hover:text-red-400 font-semibold transition">
               {isRegistering ? 'Já tens conta? Iniciar Sessão' : 'Criar nova conta'}
             </button>
           </div>
@@ -366,87 +402,84 @@ export default function App() {
     );
   }
 
-  // BLOQUEIO DE CANDIDATURA, REJEIÇÃO, BAN E KICK
-  if (userDoc?.estado === 'pendente_candidatura' || userDoc?.estado === 'pendente_analise' || userDoc?.estado === 'rejeitado' || userDoc?.estado === 'kicked' || userDoc?.estado === 'banido') {
+  // BLOQUEIO DE CANDIDATURA, ANÁLISE, REJEIÇÃO, BAN OU EX-MEMBRO
+  if (userDoc?.estado === 'pendente_candidatura' || userDoc?.estado === 'pendente_analise' || userDoc?.estado === 'rejeitado' || userDoc?.estado === 'ex_membro' || userDoc?.estado === 'banido') {
     return (
-      <div className="min-h-screen bg-[#0a0b0d] text-gray-100 p-6 flex items-center justify-center font-sans">
-        <div className="max-w-xl w-full bg-[#121418] border border-neutral-800 rounded-2xl p-8 space-y-6 shadow-2xl">
-          <div className="flex justify-between items-center border-b border-neutral-800 pb-4">
-            <h1 className="text-xl font-black text-white uppercase tracking-wide">
-              {userDoc?.estado === 'pendente_analise' && '⏳ CANDIDATURA EM ANÁLISE'}
-              {userDoc?.estado === 'rejeitado' && '❌ CANDIDATURA REJEITADA'}
-              {userDoc?.estado === 'kicked' && '⚠️ REMOVIDO DO PAINEL'}
-              {userDoc?.estado === 'banido' && '🚫 CONTA BANIDA'}
-              {userDoc?.estado === 'pendente_candidatura' && 'FORMULÁRIO DE CANDIDATURA'}
+      <div className="min-h-screen bg-[#07080a] text-zinc-100 p-6 flex items-center justify-center font-sans">
+        <div className="max-w-xl w-full bg-[#101216] border border-zinc-800/80 rounded-2xl p-8 space-y-6 shadow-2xl">
+          <div className="flex justify-between items-center border-b border-zinc-800/80 pb-4">
+            <h1 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <span>🛡️</span> 
+              {userDoc?.estado === 'pendente_analise' && 'Candidatura em Análise'}
+              {userDoc?.estado === 'rejeitado' && 'Candidatura Rejeitada'}
+              {userDoc?.estado === 'ex_membro' && 'Registo de Ex-Membro'}
+              {userDoc?.estado === 'banido' && 'Conta Banida'}
+              {userDoc?.estado === 'pendente_candidatura' && 'Formulário de Candidatura'}
             </h1>
-            <button onClick={handleLogout} className="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded-xl font-bold hover:bg-red-900 transition">Sair</button>
+            <button onClick={handleLogout} className="text-xs bg-red-950/60 text-red-400 border border-red-800/50 px-3 py-1.5 rounded-xl font-bold hover:bg-red-900/60 transition">Sair</button>
           </div>
 
-          {/* EMBED 1: PENDENTE ANÁLISE */}
           {userDoc?.estado === 'pendente_analise' && (
             <div className="space-y-4 text-center py-6">
-              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 text-amber-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black">
-                ⏳
-              </div>
-              <h2 className="text-lg font-black text-white">A tua candidatura foi submetida!</h2>
-              <p className="text-xs text-neutral-400 max-w-md mx-auto leading-relaxed">
-                A tua candidatura está a ser analisada pela Staff / Suporte dos Magnatas 01!. Aguarda aprovação para teres acesso ao painel principal.
+              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black shadow-lg">⏳</div>
+              <h2 className="text-base font-black text-white">Candidatura submetida com sucesso!</h2>
+              <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                A tua candidatura está a ser analisada pela Staff dos Magnatas 01!. Aguarda a aprovação para teres acesso total ao painel.
               </p>
             </div>
           )}
 
-          {/* EMBED 2: CANDIDATURA REJEITADA (COM OPÇÃO DE TENTAR NOVAMENTE) */}
-          {userDoc?.estado === 'rejeitado' && (
+          {(userDoc?.estado === 'rejeitado' || userDoc?.estado === 'ex_membro') && (
             <div className="space-y-6 text-center py-4">
-              <div className="bg-red-950/40 border border-red-800/80 p-6 rounded-2xl space-y-3 text-left">
+              <div className="bg-zinc-900/80 border border-zinc-800 p-6 rounded-2xl space-y-3 text-left">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">❌</span>
+                  <span className="text-2xl">{userDoc?.estado === 'rejeitado' ? '❌' : '🥾'}</span>
                   <div>
-                    <h3 className="text-sm font-black text-red-400 uppercase">Candidatura Rejeitada</h3>
-                    <p className="text-[11px] text-neutral-400">Não foste aprovado nesta tentativa.</p>
+                    <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                      {userDoc?.estado === 'rejeitado' ? 'Candidatura Não Aprovada' : 'Registo de Ex-Membro'}
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">Podes submeter um novo formulário para entrar na gang.</p>
                   </div>
                 </div>
-                <p className="text-xs text-neutral-300 pt-2 border-t border-neutral-800/80">
-                  A tua candidatura não preencheu todos os requisitos necessários no momento. Revisa as tuas informações e podes tentar novamente!
+                <p className="text-xs text-zinc-300 pt-3 border-t border-zinc-800 leading-relaxed">
+                  {userDoc?.estado === 'rejeitado' 
+                    ? 'A tua última candidatura não atingiu os critérios exigidos pela liderança. Preenche novamente com atenção.'
+                    : 'Foste desligado anteriormente da gang. Podes candidatar-te novamente para reintegrar o plantel.'}
                 </p>
               </div>
               <button 
                 onClick={handleResetCandidatura}
-                className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg transition flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition flex items-center justify-center gap-2"
               >
-                <span>🔄</span> Tentar Novamente (Preencher Nova Candidatura)
+                <span>🔄</span> Tentar Nova Candidatura
               </button>
             </div>
           )}
 
-          {/* EMBED 3: KICKED */}
-          {userDoc?.estado === 'kicked' && (
-            <div className="space-y-4 text-center py-4">
-              <div className="w-16 h-16 bg-red-600/10 border border-red-600/30 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black">🥾</div>
-              <p className="text-xs text-neutral-300">Foste removido (kikado) do painel por um membro da Suporte/Staff.</p>
-              {userDoc?.punicoes && userDoc.punicoes.length > 0 && (
-                <div className="bg-neutral-900 p-4 rounded-xl border border-red-900/50 text-left space-y-1">
-                  <span className="text-[10px] text-red-400 font-bold uppercase">Motivo do Kick:</span>
-                  <p className="text-xs text-white">{userDoc.punicoes[userDoc.punicoes.length - 1].motivo}</p>
-                </div>
-              )}
+          {userDoc?.estado === 'banido' && (
+            <div className="space-y-4 text-center py-6">
+              <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 text-red-500 rounded-2xl mx-auto flex items-center justify-center text-3xl font-black shadow-lg">🚫</div>
+              <h2 className="text-base font-black text-white">A tua conta encontra-se banida.</h2>
+              <p className="text-xs text-zinc-400">Contacta o suporte administrativo para mais informações sobre o teu castigo.</p>
             </div>
           )}
 
-          {/* EMBED 4: FORMULÁRIO DE CANDIDATURA INICIAL */}
           {userDoc?.estado === 'pendente_candidatura' && (
             <form onSubmit={handleSubmitCandidatura} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <input type="text" placeholder="Idade" value={formCandidatura.idade} onChange={e => setFormCandidatura({...formCandidatura, idade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                <input type="text" placeholder="Nome In-Game" value={formCandidatura.nomeInGame} onChange={e => setFormCandidatura({...formCandidatura, nomeInGame: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                <input type="text" placeholder="Idade" value={formCandidatura.idade} onChange={e => setFormCandidatura({...formCandidatura, idade: e.target.value})} className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
+                <input type="text" placeholder="Nome In-Game" value={formCandidatura.nomeInGame} onChange={e => setFormCandidatura({...formCandidatura, nomeInGame: e.target.value})} className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                <input type="number" placeholder="ID In-Game" value={formCandidatura.idInGame} onChange={e => setFormCandidatura({...formCandidatura, idInGame: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                <input type="number" placeholder="Kills Atuais" value={formCandidatura.killsAtual} onChange={e => setFormCandidatura({...formCandidatura, killsAtual: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
-                <input type="text" placeholder="Tempo de Cidade" value={formCandidatura.tempoCidade} onChange={e => setFormCandidatura({...formCandidatura, tempoCidade: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+              <div className="grid grid-cols-2 gap-4">
+                <input type="text" placeholder="Nome do Discord (ex: user#0000)" value={formCandidatura.discordTag} onChange={e => setFormCandidatura({...formCandidatura, discordTag: e.target.value})} className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
+                <input type="number" placeholder="ID In-Game" value={formCandidatura.idInGame} onChange={e => setFormCandidatura({...formCandidatura, idInGame: e.target.value})} className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
               </div>
-              <textarea placeholder="Motivo de entrada..." value={formCandidatura.motivo} onChange={e => setFormCandidatura({...formCandidatura, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase shadow-lg transition">Submeter Candidatura</button>
+              <div className="grid grid-cols-2 gap-4">
+                <input type="number" placeholder="Kills Atuais" value={formCandidatura.killsAtual} onChange={e => setFormCandidatura({...formCandidatura, killsAtual: e.target.value})} className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" />
+                <input type="text" placeholder="Tempo de Cidade" value={formCandidatura.tempoCidade} onChange={e => setFormCandidatura({...formCandidatura, tempoCidade: e.target.value})} className="bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" />
+              </div>
+              <textarea placeholder="Motivo de entrada para a gang..." value={formCandidatura.motivo} onChange={e => setFormCandidatura({...formCandidatura, motivo: e.target.value})} className="w-full bg-zinc-900/90 border border-zinc-800 p-3.5 rounded-xl text-xs text-white h-24 focus:border-red-500 outline-none resize-none" required></textarea>
+              <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition">Submeter Candidatura</button>
             </form>
           )}
         </div>
@@ -461,34 +494,40 @@ export default function App() {
     if (subTabBase === 'ativos') return m.estado === 'aprovado' && !m.ausente;
     if (subTabBase === 'destaque') return m.destacado;
     if (subTabBase === 'ausentes') return m.ausente === true;
-    if (subTabBase === 'banidos') return m.estado === 'banido' || m.estado === 'rejeitado' || m.estado === 'kicked';
+    if (subTabBase === 'ex_membros') return m.estado === 'ex_membro';
+    if (subTabBase === 'banidos') return m.estado === 'banido' || m.estado === 'rejeitado';
     return true;
   });
 
   return (
-    <div className="min-h-screen bg-[#0d0e12] text-gray-200 font-sans flex relative">
+    <div className="min-h-screen bg-[#07080a] text-zinc-200 font-sans flex relative selection:bg-red-500 selection:text-white">
       {/* SIDEBAR */}
-      <aside className="w-64 bg-[#121418] border-r border-neutral-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20">
+      <aside className="w-72 bg-[#101216] border-r border-zinc-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20 shadow-xl">
         <div>
-          <div className="p-5 border-b border-neutral-800/60 flex items-center gap-3">
-            <div className="w-8 h-8 bg-red-600/20 border border-red-600/40 rounded-xl flex items-center justify-center font-black text-red-500 shadow-lg">🛡️</div>
-            <h2 className="text-lg font-black tracking-wider text-red-600">MAGNATAS 01!</h2>
+          <div className="p-6 border-b border-zinc-800/80 flex items-center gap-3">
+            <div className="w-9 h-9 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-center font-black text-red-500 shadow-md">🛡️</div>
+            <div>
+              <h2 className="text-sm font-black tracking-wider text-white">MAGNATAS 01!</h2>
+              <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Painel Oficial</span>
+            </div>
           </div>
-          <nav className="p-3 space-y-1 text-xs font-bold">
-            <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'base' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👥</span> Base da Gang</button>
-            <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'roupas' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👕</span> Roupas & Kits</button>
-            <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'radio' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📡</span> Frequências Rádio</button>
-            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'regras' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>📖</span> Regras Oficiais</button>
-            <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'cargos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>🎖️</span> Lista de Cargos</button>
-            <button onClick={() => setCurrentView('meusavisos')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'meusavisos' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>⚠️</span> Meus Avisos / Punições</button>
-            <button onClick={() => setCurrentView('perfil')} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition ${currentView === 'perfil' ? 'bg-red-600/10 text-red-500 font-extrabold' : 'text-neutral-400 hover:bg-neutral-900/50'}`}><span>👤</span> Meu Perfil & Discord</button>
+          <nav className="p-4 space-y-1.5 text-xs font-bold">
+            <button onClick={() => setCurrentView('base')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'base' ? 'bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>👥</span> Base da Gang</button>
+            <button onClick={() => setCurrentView('roupas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'roupas' ? 'bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>👕</span> Roupas & Kits</button>
+            <button onClick={() => setCurrentView('radio')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'radio' ? 'bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>📡</span> Frequências Rádio</button>
+            <button onClick={() => setCurrentView('discord')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'discord' ? 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>💬</span> Discord da Gang</button>
+            <button onClick={() => setCurrentView('avisos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'avisos' ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>📢</span> Avisos da Staff</button>
+            <button onClick={() => setCurrentView('regras')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'regras' ? 'bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>📖</span> Regras Oficiais</button>
+            <button onClick={() => setCurrentView('cargos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'cargos' ? 'bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>🎖️</span> Lista de Cargos</button>
+            <button onClick={() => setCurrentView('meusavisos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'meusavisos' ? 'bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>⚠️</span> Meus Avisos / Punições</button>
+            <button onClick={() => setCurrentView('perfil')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${currentView === 'perfil' ? 'bg-red-500/10 border border-red-500/30 text-red-400 font-extrabold shadow-sm' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200'}`}><span>👤</span> Meu Perfil & Discord</button>
           </nav>
         </div>
 
         {isSupport && (
-          <div className="p-3">
-            <button onClick={() => setCurrentView('admin')} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-black py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition">
-              <span>⚙️</span> Painel Admin & Suporte
+          <div className="p-4">
+            <button onClick={() => setCurrentView('admin')} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition">
+              <span>⚙️</span> Painel Admin & Staff
             </button>
           </div>
         )}
@@ -496,9 +535,12 @@ export default function App() {
 
       {/* ÁREA DE CONTEÚDO */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-neutral-800/80 bg-[#121418] px-8 flex justify-between items-center sticky top-0 z-30">
-          <h1 className="font-black text-sm uppercase tracking-wider text-red-600">MAGNATAS 01! &bull; {currentView.toUpperCase()}</h1>
-          <button onClick={handleLogout} className="text-neutral-500 hover:text-red-500 text-sm font-bold">🚪 Sair</button>
+        <header className="h-20 border-b border-zinc-800/80 bg-[#101216]/80 backdrop-blur-md px-8 flex justify-between items-center sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h1 className="font-black text-xs uppercase tracking-widest text-zinc-300">MAGNATAS 01! <span className="text-zinc-600 mx-2">/</span> <span className="text-red-500">{currentView}</span></h1>
+          </div>
+          <button onClick={handleLogout} className="text-xs bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-red-400 hover:border-red-500/40 px-4 py-2 rounded-xl font-bold transition">🚪 Sair da Conta</button>
         </header>
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
@@ -506,52 +548,43 @@ export default function App() {
           {/* BASE DA GANG */}
           {currentView === 'base' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-2 border-b border-neutral-800 pb-4">
-                <button onClick={() => setSubTabBase('ativos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'ativos' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>👥 Ativos ({usersList.filter(u => u.estado === 'aprovado' && !u.ausente).length})</button>
-                <button onClick={() => setSubTabBase('destaque')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'destaque' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⭐ Em Destaque ({usersList.filter(u => u.destacado).length})</button>
-                <button onClick={() => setSubTabBase('ausentes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'ausentes' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>💤 Ausentes ({usersList.filter(u => u.ausente).length})</button>
-                <button onClick={() => setSubTabBase('banidos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${subTabBase === 'banidos' ? 'bg-red-950 text-red-400 border border-red-800' : 'bg-neutral-900 text-neutral-400'}`}>🚫 Inativos / Ban / Kick ({usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado' || u.estado === 'kicked').length})</button>
+              <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-4 overflow-x-auto">
+                <button onClick={() => setSubTabBase('ativos')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${subTabBase === 'ativos' ? 'bg-red-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>👥 Ativos ({usersList.filter(u => u.estado === 'aprovado' && !u.ausente).length})</button>
+                <button onClick={() => setSubTabBase('destaque')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${subTabBase === 'destaque' ? 'bg-amber-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>⭐ Em Destaque ({usersList.filter(u => u.destacado).length})</button>
+                <button onClick={() => setSubTabBase('ausentes')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${subTabBase === 'ausentes' ? 'bg-purple-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>💤 Ausentes ({usersList.filter(u => u.ausente).length})</button>
+                <button onClick={() => setSubTabBase('ex_membros')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${subTabBase === 'ex_membros' ? 'bg-blue-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>🥾 Ex-Membros ({usersList.filter(u => u.estado === 'ex_membro').length})</button>
+                <button onClick={() => setSubTabBase('banidos')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${subTabBase === 'banidos' ? 'bg-red-950 text-red-400 border border-red-800/60 shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>🚫 Banidos ({usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado').length})</button>
               </div>
 
-              <input type="text" placeholder="Pesquisar membros..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#121418] border border-neutral-800 px-4 py-3 rounded-xl text-xs text-white" />
+              <input type="text" placeholder="Pesquisar membros por nome ou in-game..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#101216] border border-zinc-800/80 px-4 py-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none transition shadow-sm" />
 
-              <div className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="bg-[#101216] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl">
                 <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="border-b border-neutral-800 text-neutral-400 bg-neutral-900/30">
-                      <th className="p-4">Membro</th>
-                      <th className="p-4">ID In-Game</th>
-                      <th className="p-4">Estado</th>
-                      <th className="p-4">Cargos</th>
-                      {isSupport && <th className="p-4 text-center">Ações Admin</th>}
+                    <tr className="border-b border-zinc-800/80 text-zinc-400 bg-zinc-900/40">
+                      <th className="p-4 font-extrabold uppercase">Membro</th>
+                      <th className="p-4 font-extrabold uppercase">ID In-Game</th>
+                      <th className="p-4 font-extrabold uppercase">Estado</th>
+                      <th className="p-4 font-extrabold uppercase">Cargos</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-800/60">
+                  <tbody className="divide-y divide-zinc-800/50">
                     {membrosBase.map(m => (
-                      <tr key={m.id} className="hover:bg-neutral-900/40">
+                      <tr key={m.id} className="hover:bg-zinc-900/40 transition">
                         <td className="p-4 flex items-center gap-3">
-                          <img src={m.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-8 h-8 rounded-full border border-neutral-700" />
+                          <img src={m.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-9 h-9 rounded-xl border border-zinc-700/80 object-cover shadow-sm" />
                           <div>
                             <span className="font-black text-white block">{m.nomeInGame || m.username} {m.destacado && '⭐'}</span>
-                            <span className="text-[10px] text-neutral-400">@{m.username}</span>
+                            <span className="text-[10px] text-zinc-400">@{m.username} {m.discordTag && `• ${m.discordTag}`}</span>
                           </div>
                         </td>
-                        <td className="p-4 text-white font-bold">ID: {m.idInGame || 'N/A'}</td>
-                        <td className="p-4"><span className="px-2.5 py-1 rounded text-[10px] uppercase font-bold bg-neutral-900 border border-neutral-700">{m.estado}</span></td>
+                        <td className="p-4 text-zinc-300 font-bold">ID: {m.idInGame || 'N/A'}</td>
+                        <td className="p-4"><span className="px-2.5 py-1 rounded-lg text-[10px] uppercase font-extrabold bg-zinc-900 border border-zinc-700/60 text-zinc-300">{m.estado}</span></td>
                         <td className="p-4">
                           <div className="flex flex-wrap gap-1">
-                            {(m.roles || []).map(r => <span key={r} className="px-2 py-0.5 rounded bg-neutral-900 text-[10px] text-neutral-300">{r}</span>)}
+                            {(m.roles || []).map(r => <span key={r} className="px-2 py-0.5 rounded-md bg-zinc-900/80 border border-zinc-800 text-[10px] text-zinc-300">{r}</span>)}
                           </div>
                         </td>
-                        {isSupport && (
-                          <td className="p-4 text-center">
-                            {m.estado === 'aprovado' && (
-                              <button onClick={() => handleKickMembro(m)} className="bg-red-950/80 hover:bg-red-900 text-red-400 border border-red-800 px-3 py-1.5 rounded-lg font-bold text-[10px]">
-                                🥾 Kick do Painel
-                              </button>
-                            )}
-                          </td>
-                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -563,35 +596,37 @@ export default function App() {
           {/* ROUPAS & KITS */}
           {currentView === 'roupas' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Roupas & Kits Oficiais</h2>
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-black text-white uppercase tracking-wider">Roupas & Kits Oficiais</h2>
+              </div>
               {isFounder && (
-                <form onSubmit={handleAddRoupa} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Novo Kit (Apenas Owner)</h3>
+                <form onSubmit={handleAddRoupa} className="bg-[#101216] border border-zinc-800/80 p-6 rounded-2xl space-y-4 shadow-xl">
+                  <h3 className="text-xs font-black text-red-500 uppercase tracking-wider">Adicionar Novo Kit / Roupa (Owner)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input type="text" placeholder="Nome do Kit / Roupa" value={formRoupa.nome} onChange={e => setFormRoupa({...formRoupa, nome: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <input type="text" placeholder="Número no Vestuário (ex: #145)" value={formRoupa.numero} onChange={e => setFormRoupa({...formRoupa, numero: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <input type="url" placeholder="Link da Imagem (URL)" value={formRoupa.imagem} onChange={e => setFormRoupa({...formRoupa, imagem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+                    <input type="text" placeholder="Nome do Kit" value={formRoupa.nome} onChange={e => setFormRoupa({...formRoupa, nome: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
+                    <input type="text" placeholder="Número no Vestuário (ex: #145)" value={formRoupa.numero} onChange={e => setFormRoupa({...formRoupa, numero: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
+                    <input type="url" placeholder="Link da Imagem (URL)" value={formRoupa.imagem} onChange={e => setFormRoupa({...formRoupa, imagem: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" />
                   </div>
                   <div>
-                    <label className="text-xs text-neutral-400 font-bold block mb-1">Ou carregar foto do Computador (PC):</label>
-                    <input type="file" accept="image/*" onChange={e => handleFileUpload(e, (res) => setFormRoupa({...formRoupa, imagem: res}))} className="text-xs text-neutral-400 bg-neutral-900 p-2 rounded-xl w-full border border-neutral-800" />
+                    <label className="text-xs text-zinc-400 font-bold block mb-1">Ou carregar foto do Computador (PC):</label>
+                    <input type="file" accept="image/*" onChange={e => handleFileUpload(e, (res) => setFormRoupa({...formRoupa, imagem: res}))} className="text-xs text-zinc-400 bg-zinc-900 p-2.5 rounded-xl w-full border border-zinc-800" />
                   </div>
-                  <button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase">Guardar Kit</button>
+                  <button type="submit" className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-red-600/20 transition">Guardar Kit</button>
                 </form>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {roupas.map(item => (
-                  <div key={item.id} className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-hidden shadow-xl space-y-3 relative group">
-                    <img src={item.imagem || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-full h-48 object-cover" />
-                    <div className="p-4 flex justify-between items-center">
+                  <div key={item.id} className="bg-[#101216] border border-zinc-800/80 rounded-2xl overflow-hidden shadow-xl space-y-3 group">
+                    <img src={item.imagem || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-full h-52 object-cover group-hover:scale-105 transition duration-500" />
+                    <div className="p-5 flex justify-between items-center">
                       <div>
                         <h4 className="font-black text-white text-sm">{item.nome}</h4>
-                        <span className="inline-block bg-red-600/20 text-red-400 border border-red-600/40 text-xs font-black px-2.5 py-1 rounded-lg mt-1">
+                        <span className="inline-block bg-red-500/10 text-red-400 border border-red-500/30 text-xs font-black px-3 py-1 rounded-lg mt-2">
                           NÚMERO: #{item.numero}
                         </span>
                       </div>
-                      {isFounder && <button onClick={() => handleDeleteRoupa(item.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900">Remover</button>}
+                      {isFounder && <button onClick={() => handleDeleteRoupa(item.id)} className="text-xs bg-red-950/60 text-red-400 border border-red-800/50 px-3 py-2 rounded-xl font-bold hover:bg-red-900/60 transition">Remover</button>}
                     </div>
                   </div>
                 ))}
@@ -602,28 +637,28 @@ export default function App() {
           {/* FREQUÊNCIAS RÁDIO */}
           {currentView === 'radio' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Frequências Rádio</h2>
+              <h2 className="text-lg font-black text-white uppercase tracking-wider">Frequências de Rádio Oficiais</h2>
               {isFounder && (
-                <form onSubmit={handleAddRadio} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4 max-w-xl">
-                  <h3 className="text-xs font-black text-amber-500 uppercase">Gerir Frequência Rádio (Adicionar / Editar)</h3>
+                <form onSubmit={handleAddRadio} className="bg-[#101216] border border-zinc-800/80 p-6 rounded-2xl space-y-4 max-w-xl shadow-xl">
+                  <h3 className="text-xs font-black text-amber-400 uppercase tracking-wider">Gerir Frequência Rádio</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <input type="text" placeholder="Título (ex: Rádio Principal)" value={formRadio.titulo} onChange={e => setFormRadio({...formRadio, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <input type="text" placeholder="Frequência (ex: 100.0)" value={formRadio.frequencia} onChange={e => setFormRadio({...formRadio, frequencia: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="text" placeholder="Título (ex: Rádio Assalto)" value={formRadio.titulo} onChange={e => setFormRadio({...formRadio, titulo: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-amber-500 outline-none" required />
+                    <input type="text" placeholder="Frequência (ex: 100.0)" value={formRadio.frequencia} onChange={e => setFormRadio({...formRadio, frequencia: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-amber-500 outline-none" required />
                   </div>
-                  <input type="text" placeholder="Informação / Nota..." value={formRadio.info} onChange={e => setFormRadio({...formRadio, info: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                  <button type="submit" className="bg-amber-600 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase">Publicar / Atualizar Rádio</button>
+                  <input type="text" placeholder="Informação / Nota sobre a frequência..." value={formRadio.info} onChange={e => setFormRadio({...formRadio, info: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-amber-500 outline-none" required />
+                  <button type="submit" className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-600/20 transition">Publicar Rádio</button>
                 </form>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {radiosList.map(rad => (
-                  <div key={rad.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start">
-                    <div className="space-y-1">
-                      <h3 className="text-sm font-black text-red-500 uppercase">{rad.titulo}: {rad.frequencia} MHz</h3>
-                      <p className="text-xs text-neutral-400">{rad.info}</p>
+                  <div key={rad.id} className="bg-[#101216] border border-zinc-800/80 p-6 rounded-2xl flex justify-between items-start shadow-xl">
+                    <div className="space-y-1.5">
+                      <h3 className="text-sm font-black text-red-500 uppercase tracking-wide">📡 {rad.titulo}: <span className="text-white font-extrabold">{rad.frequencia} MHz</span></h3>
+                      <p className="text-xs text-zinc-400 leading-relaxed">{rad.info}</p>
                     </div>
                     {isFounder && (
-                      <button onClick={() => handleDeleteRadio(rad.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900">
+                      <button onClick={() => handleDeleteRadio(rad.id)} className="text-xs bg-red-950/60 text-red-400 border border-red-800/50 px-3 py-1.5 rounded-xl font-bold hover:bg-red-900/60 transition">
                         Eliminar
                       </button>
                     )}
@@ -633,31 +668,104 @@ export default function App() {
             </div>
           )}
 
+          {/* DISCORD DA GANG */}
+          {currentView === 'discord' && (
+            <div className="max-w-2xl mx-auto space-y-6 text-center py-6">
+              <div className="bg-[#101216] border border-zinc-800/80 p-10 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="w-20 h-20 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-2xl mx-auto flex items-center justify-center text-4xl shadow-lg">💬</div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-black text-white uppercase tracking-wider">Discord Oficial Magnatas 01!</h2>
+                  <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                    Junta-te ao nosso servidor oficial do Discord para comunicação em call, avisos importantes, suporte prioritário e eventos da gang.
+                  </p>
+                </div>
+                <div className="pt-4">
+                  <a href="https://discord.gg" target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black px-8 py-4 rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition">
+                    <span>🔗</span> Entrar no Discord Oficial
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AVISOS DA STAFF */}
+          {currentView === 'avisos' && (
+            <div className="space-y-6 max-w-3xl mx-auto">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-black text-white uppercase tracking-wider">📢 Mural de Avisos da Staff</h2>
+              </div>
+
+              {isSupport && (
+                <form onSubmit={handleAddAvisoStaff} className="bg-[#101216] border border-zinc-800/80 p-6 rounded-2xl space-y-4 shadow-xl">
+                  <h3 className="text-xs font-black text-amber-400 uppercase tracking-wider">Publicar Novo Aviso Oficial</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="text" placeholder="Título do Aviso" value={formAviso.titulo} onChange={e => setFormAviso({...formAviso, titulo: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-amber-500 outline-none" required />
+                    <select value={formAviso.importancia} onChange={e => setFormAviso({...formAviso, importancia: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-amber-500 outline-none">
+                      <option value="Normal">Normal</option>
+                      <option value="Importante">Importante</option>
+                      <option value="Urgente">🚨 Urgente</option>
+                    </select>
+                  </div>
+                  <textarea placeholder="Mensagem detalhada do aviso..." value={formAviso.mensagem} onChange={e => setFormAviso({...formAviso, mensagem: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white h-24 focus:border-amber-500 outline-none resize-none" required></textarea>
+                  <button type="submit" className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-600/20 transition">Publicar Aviso</button>
+                </form>
+              )}
+
+              <div className="space-y-4">
+                {avisosStaff.length === 0 ? (
+                  <div className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl text-center text-zinc-500 text-xs shadow-xl">Sem avisos da staff publicados no momento.</div>
+                ) : (
+                  avisosStaff.map(aviso => (
+                    <div key={aviso.id} className={`bg-[#101216] border p-6 rounded-2xl space-y-3 shadow-xl ${aviso.importancia === 'Urgente' ? 'border-red-500/50 bg-red-950/10' : 'border-zinc-800/80'}`}>
+                      <div className="flex justify-between items-center border-b border-zinc-800/80 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${aviso.importancia === 'Urgente' ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}`}>
+                            {aviso.importancia}
+                          </span>
+                          <h3 className="text-sm font-black text-white">{aviso.titulo}</h3>
+                        </div>
+                        <span className="text-[10px] text-zinc-500 font-bold">{aviso.timestamp}</span>
+                      </div>
+                      <p className="text-xs text-zinc-300 leading-relaxed">{aviso.mensagem}</p>
+                      <div className="flex justify-between items-center pt-2 text-[10px] text-zinc-500">
+                        <span>Por: <strong className="text-zinc-400">{aviso.autor}</strong></span>
+                        {isSupport && (
+                          <button onClick={() => handleDeleteAviso(aviso.id)} className="text-red-400 hover:text-red-300 font-bold">Apagar Aviso</button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           {/* REGRAS OFICIAIS */}
           {currentView === 'regras' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Regras Oficiais do Servidor</h2>
+            <div className="space-y-6 max-w-3xl mx-auto">
+              <h2 className="text-lg font-black text-white uppercase tracking-wider">Regras Oficiais do Servidor</h2>
               {isFounder && (
-                <form onSubmit={handleAddRegra} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-4">
-                  <h3 className="text-xs font-black text-red-500 uppercase">Adicionar Nova Regra (Apenas Owner)</h3>
+                <form onSubmit={handleAddRegra} className="bg-[#101216] border border-zinc-800/80 p-6 rounded-2xl space-y-4 shadow-xl">
+                  <h3 className="text-xs font-black text-red-500 uppercase tracking-wider">Adicionar Nova Regra (Owner)</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <input type="text" placeholder="Título da Regra" value={formRegra.titulo} onChange={e => setFormRegra({...formRegra, titulo: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <input type="number" placeholder="Ordem de Exibição" value={formRegra.ordem} onChange={e => setFormRegra({...formRegra, ordem: e.target.value})} className="bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
+                    <input type="text" placeholder="Título da Regra" value={formRegra.titulo} onChange={e => setFormRegra({...formRegra, titulo: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
+                    <input type="number" placeholder="Ordem de Exibição" value={formRegra.ordem} onChange={e => setFormRegra({...formRegra, ordem: e.target.value})} className="bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
                   </div>
-                  <textarea placeholder="Descrição detalhada da regra..." value={formRegra.descricao} onChange={e => setFormRegra({...formRegra, descricao: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-                  <button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase">Publicar Regra</button>
+                  <textarea placeholder="Descrição detalhada da regra..." value={formRegra.descricao} onChange={e => setFormRegra({...formRegra, descricao: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white h-24 focus:border-red-500 outline-none resize-none" required></textarea>
+                  <button type="submit" className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-red-600/20 transition">Publicar Regra</button>
                 </form>
               )}
 
               <div className="space-y-4">
                 {regras.map((r, i) => (
-                  <div key={r.id} className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl flex justify-between items-start space-x-4">
-                    <div className="space-y-1">
+                  <div key={r.id} className="bg-[#101216] border border-zinc-800/80 p-6 rounded-2xl flex justify-between items-start space-x-4 shadow-xl">
+                    <div className="space-y-1.5">
                       <h4 className="font-black text-white text-sm">#{i+1}. {r.titulo}</h4>
-                      <p className="text-xs text-neutral-300 leading-relaxed">{r.descricao}</p>
+                      <p className="text-xs text-zinc-300 leading-relaxed">{r.descricao}</p>
                     </div>
                     {isFounder && (
-                      <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950 text-red-400 px-3 py-1.5 rounded-lg border border-red-900 shrink-0">
+                      <button onClick={() => handleDeleteRegra(r.id)} className="text-xs bg-red-950/60 text-red-400 border border-red-800/50 px-3 py-1.5 rounded-xl font-bold hover:bg-red-900/60 transition shrink-0">
                         Remover
                       </button>
                     )}
@@ -670,12 +778,12 @@ export default function App() {
           {/* LISTA DE CARGOS */}
           {currentView === 'cargos' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-black text-white">Lista Completa de Cargos do Servidor</h2>
+              <h2 className="text-lg font-black text-white uppercase tracking-wider">Lista Completa de Cargos do Servidor</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {ALL_ROLES.map(role => (
-                  <div key={role.name} className="bg-[#121418] border border-neutral-800 p-5 rounded-2xl flex justify-between items-center">
-                    <span className={`px-3 py-1 rounded-lg text-xs font-black border uppercase ${role.color}`}>{role.name}</span>
-                    <span className="text-xs bg-neutral-900 px-3 py-1 rounded-full text-neutral-400 font-bold">
+                  <div key={role.name} className="bg-[#101216] border border-zinc-800/80 p-5 rounded-2xl flex justify-between items-center shadow-xl">
+                    <span className={`px-3 py-1.5 rounded-xl text-xs font-black border uppercase tracking-wide ${role.color}`}>{role.name}</span>
+                    <span className="text-xs bg-zinc-900 px-3 py-1 rounded-full text-zinc-400 font-bold border border-zinc-800">
                       {usersList.filter(u => (u.roles || []).includes(role.name)).length} membros
                     </span>
                   </div>
@@ -687,24 +795,24 @@ export default function App() {
           {/* MEUS AVISOS / PUNIÇÕES */}
           {currentView === 'meusavisos' && (
             <div className="space-y-6 max-w-2xl mx-auto">
-              <h2 className="text-xl font-black text-white flex items-center gap-2">⚠️ Meus Avisos / Histórico de Punições</h2>
+              <h2 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wider">⚠️ Meus Avisos / Histórico de Punições</h2>
               
               {userDoc?.punicoes && userDoc.punicoes.length > 0 ? (
                 <div className="space-y-4">
                   {userDoc.punicoes.map((p, idx) => (
-                    <div key={idx} className="bg-[#121418] border border-red-900/60 p-6 rounded-2xl space-y-2">
-                      <div className="flex justify-between items-center border-b border-neutral-800 pb-2">
-                        <span className="text-xs font-black text-red-500 uppercase">{p.tipo}</span>
-                        <span className="text-[10px] text-neutral-500">{p.data}</span>
+                    <div key={idx} className="bg-[#101216] border border-red-900/40 p-6 rounded-2xl space-y-2.5 shadow-xl">
+                      <div className="flex justify-between items-center border-b border-zinc-800/80 pb-3">
+                        <span className="text-xs font-black text-red-400 uppercase tracking-wider">{p.tipo}</span>
+                        <span className="text-[10px] text-zinc-500 font-bold">{p.data}</span>
                       </div>
-                      <p className="text-xs text-neutral-300"><strong>Motivo:</strong> {p.motivo}</p>
-                      <p className="text-xs text-neutral-400"><strong>Duração:</strong> {p.tempo || 'N/A'}</p>
-                      <p className="text-[10px] text-neutral-500">Aplicado por: {p.aplicadoPor}</p>
+                      <p className="text-xs text-zinc-300"><strong>Motivo:</strong> {p.motivo}</p>
+                      <p className="text-xs text-zinc-400"><strong>Duração:</strong> {p.tempo || 'N/A'}</p>
+                      <p className="text-[10px] text-zinc-500 pt-1">Aplicado por: <strong className="text-zinc-400">{p.aplicadoPor}</strong></p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="p-6 bg-emerald-950/40 border border-emerald-900/60 rounded-2xl text-emerald-400 text-xs font-bold text-center">
+                <div className="p-8 bg-emerald-950/20 border border-emerald-900/40 rounded-2xl text-emerald-400 text-xs font-bold text-center shadow-xl">
                   ✓ Excelente! Não tens avisos ou punições registadas no teu perfil.
                 </div>
               )}
@@ -713,58 +821,59 @@ export default function App() {
 
           {/* MEU PERFIL & DISCORD */}
           {currentView === 'perfil' && (
-            <div className="max-w-xl mx-auto bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-6">
-              <div className="flex items-center gap-4 border-b border-neutral-800 pb-6">
-                <img src={formPerfil.avatar || userDoc?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-16 h-16 rounded-full border-2 border-red-600 object-cover" />
+            <div className="max-w-xl mx-auto bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-6 shadow-2xl">
+              <div className="flex items-center gap-4 border-b border-zinc-800/80 pb-6">
+                <img src={formPerfil.avatar || userDoc?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"} className="w-16 h-16 rounded-2xl border-2 border-red-500/60 object-cover shadow-md" />
                 <div>
-                  <h3 className="text-lg font-black text-white">{userDoc?.nomeInGame || user.username}</h3>
-                  <p className="text-xs text-neutral-400">@{user.username}</p>
-                  <p className="text-[10px] text-red-500 font-bold mt-1">{user.email}</p>
+                  <h3 className="text-base font-black text-white">{userDoc?.nomeInGame || user.username}</h3>
+                  <p className="text-xs text-zinc-400">@{user.username} {userDoc?.discordTag && `• ${userDoc.discordTag}`}</p>
+                  <p className="text-[10px] text-red-500 font-bold mt-1 uppercase tracking-wider">{user.email}</p>
                 </div>
               </div>
 
               <form onSubmit={handleSavePerfil} className="space-y-4">
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">URL do Avatar (Link de Imagem):</label>
-                  <input type="url" placeholder="https://..." value={formPerfil.avatar} onChange={e => setFormPerfil({...formPerfil, avatar: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" />
+                  <label className="text-xs text-zinc-400 font-bold block mb-1">URL do Avatar (Link de Imagem):</label>
+                  <input type="url" placeholder="https://..." value={formPerfil.avatar} onChange={e => setFormPerfil({...formPerfil, avatar: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">Ou Carregar foto do Computador (PC):</label>
-                  <input type="file" accept="image/*" onChange={e => handleFileUpload(e, (res) => setFormPerfil({...formPerfil, avatar: res}))} className="text-xs text-neutral-400 bg-neutral-900 p-2 rounded-xl w-full border border-neutral-800" />
+                  <label className="text-xs text-zinc-400 font-bold block mb-1">Ou Carregar foto do Computador (PC):</label>
+                  <input type="file" accept="image/*" onChange={e => handleFileUpload(e, (res) => setFormPerfil({...formPerfil, avatar: res}))} className="text-xs text-zinc-400 bg-zinc-900 p-2.5 rounded-xl w-full border border-zinc-800" />
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400 font-bold block mb-1">Biografia</label>
-                  <textarea placeholder="Escreve a tua biografia..." value={formPerfil.biografia} onChange={e => setFormPerfil({...formPerfil, biografia: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24"></textarea>
+                  <label className="text-xs text-zinc-400 font-bold block mb-1">Biografia Pessoal</label>
+                  <textarea placeholder="Escreve a tua biografia..." value={formPerfil.biografia} onChange={e => setFormPerfil({...formPerfil, biografia: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white h-24 focus:border-red-500 outline-none resize-none"></textarea>
                 </div>
-                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase">Guardar Alterações do Perfil</button>
+                <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition">Guardar Alterações do Perfil</button>
               </form>
             </div>
           )}
 
-          {/* PAINEL ADMIN COMPLETO */}
+          {/* PAINEL ADMIN & STAFF */}
           {currentView === 'admin' && isSupport && (
             <div className="space-y-6">
-              <div className="flex gap-2 border-b border-neutral-800 pb-4 overflow-x-auto">
-                <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⏳ Candidaturas</button>
-                <button onClick={() => setAdminTab('cargos')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'cargos' ? 'bg-amber-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>🎖️ Gestão de Cargos</button>
-                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'punicoes' ? 'bg-red-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>⚠️ Punições & Kicks / Unban</button>
-                <button onClick={() => setAdminTab('logs')} className={`px-4 py-2 rounded-xl text-xs font-bold ${adminTab === 'logs' ? 'bg-purple-600 text-white' : 'bg-neutral-900 text-neutral-400'}`}>📜 Logs</button>
+              <div className="flex gap-2 border-b border-zinc-800/80 pb-4 overflow-x-auto">
+                <button onClick={() => setAdminTab('candidaturas')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'candidaturas' ? 'bg-amber-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>⏳ Candidaturas</button>
+                <button onClick={() => setAdminTab('cargos')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'cargos' ? 'bg-amber-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>🎖️ Gestão de Cargos & Kicks</button>
+                <button onClick={() => setAdminTab('punicoes')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'punicoes' ? 'bg-red-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>⚠️ Punições & Revogações</button>
+                <button onClick={() => setAdminTab('logs')} className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${adminTab === 'logs' ? 'bg-purple-600 text-white shadow-md' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>📜 Logs do Sistema</button>
               </div>
 
               {adminTab === 'candidaturas' && (
                 <div className="space-y-4">
                   {usersList.filter(u => u.estado === 'pendente_analise').length === 0 ? (
-                    <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl text-center text-neutral-500 text-xs">Sem candidaturas pendentes.</div>
+                    <div className="bg-[#101216] border border-zinc-800/80 p-10 rounded-2xl text-center text-zinc-500 text-xs shadow-xl">Sem candidaturas pendentes de análise.</div>
                   ) : (
                     usersList.filter(u => u.estado === 'pendente_analise').map(cand => (
-                      <div key={cand.id} className="bg-[#121418] border border-amber-500/30 p-6 rounded-2xl flex justify-between items-center">
-                        <div>
-                          <h4 className="font-black text-white text-sm">{cand.username} (In-Game: {cand.nomeInGame || 'N/A'})</h4>
-                          <p className="text-xs text-neutral-400 mt-1">ID: {cand.idInGame} | Idade: {cand.idade} | Motivo: {cand.motivo}</p>
+                      <div key={cand.id} className="bg-[#101216] border border-amber-500/30 p-6 rounded-2xl flex justify-between items-center shadow-xl">
+                        <div className="space-y-1">
+                          <h4 className="font-black text-white text-sm">{cand.username} <span className="text-zinc-400 text-xs font-normal">({cand.discordTag || 'Sem Discord'})</span></h4>
+                          <p className="text-xs text-zinc-400"><strong>In-Game:</strong> {cand.nomeInGame || 'N/A'} | <strong>ID:</strong> {cand.idInGame} | <strong>Idade:</strong> {cand.idade}</p>
+                          <p className="text-xs text-zinc-300 pt-1"><strong>Motivo:</strong> {cand.motivo}</p>
                         </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => handleAprovarCandidatura(cand)} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Aprovar</button>
-                          <button onClick={() => handleReprovarCandidatura(cand)} className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold">Reprovar</button>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => handleAprovarCandidatura(cand)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition">Aprovar</button>
+                          <button onClick={() => handleReprovarCandidatura(cand)} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-red-600/20 transition">Reprovar</button>
                         </div>
                       </div>
                     ))
@@ -773,40 +882,49 @@ export default function App() {
               )}
 
               {adminTab === 'cargos' && (
-                <div className="bg-[#121418] border border-neutral-800 rounded-2xl overflow-visible shadow-2xl">
+                <div className="bg-[#101216] border border-zinc-800/80 rounded-2xl overflow-visible shadow-2xl">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="border-b border-neutral-800 text-neutral-400 bg-neutral-900/30">
-                        <th className="p-4">Membro</th>
-                        <th className="p-4">Cargos Atuais</th>
-                        <th className="p-4 text-center">Atribuir / Remover Cargos</th>
+                      <tr className="border-b border-zinc-800/80 text-zinc-400 bg-zinc-900/40">
+                        <th className="p-4 font-extrabold uppercase">Membro / Jogador</th>
+                        <th className="p-4 font-extrabold uppercase">Cargos Atuais</th>
+                        <th className="p-4 font-extrabold uppercase text-center">Atribuir / Gerir Cargos</th>
+                        <th className="p-4 font-extrabold uppercase text-center">Ação Staff</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-800/60">
-                      {usersList.map(m => (
-                        <tr key={m.id} className="hover:bg-neutral-900/40">
-                          <td className="p-4 font-bold text-white">{m.nomeInGame || m.username} (@{m.username})</td>
+                    <tbody className="divide-y divide-zinc-800/50">
+                      {usersList.filter(u => u.estado === 'aprovado').map(m => (
+                        <tr key={m.id} className="hover:bg-zinc-900/40 transition">
+                          <td className="p-4 font-bold text-white">
+                            {m.nomeInGame || m.username} <span className="text-zinc-500 text-[10px] block">@{m.username} {m.discordTag && `• ${m.discordTag}`}</span>
+                          </td>
                           <td className="p-4">
                             <div className="flex flex-wrap gap-1">
-                              {(m.roles || []).map(r => <span key={r} className="px-2 py-0.5 rounded bg-neutral-900 text-[10px] text-neutral-300">{r}</span>)}
+                              {(m.roles || []).map(r => <span key={r} className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300">{r}</span>)}
                             </div>
                           </td>
                           <td className="p-4 text-center relative">
-                            <button onClick={() => setActiveRoleModalUser(activeRoleModalUser === m.id ? null : m.id)} className="bg-amber-600/20 border border-amber-600/40 text-amber-300 px-3 py-1.5 rounded-lg text-[11px] font-bold">
+                            <button onClick={() => setActiveRoleModalUser(activeRoleModalUser === m.id ? null : m.id)} className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3.5 py-2 rounded-xl text-[11px] font-bold hover:bg-amber-500/20 transition">
                               + Gerir Cargos
                             </button>
                             {activeRoleModalUser === m.id && (
-                              <div className="absolute right-10 top-12 w-60 bg-[#16191f] border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-left space-y-1.5 max-h-56 overflow-y-auto">
+                              <div className="absolute right-12 top-14 w-64 bg-[#14161b] border border-zinc-700/80 rounded-2xl p-4 shadow-2xl z-50 text-left space-y-1.5 max-h-60 overflow-y-auto">
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2 pb-1 border-b border-zinc-800">Cargos Disponíveis</span>
                                 {ALL_ROLES.map(r => {
                                   const has = (m.roles || []).includes(r.name);
                                   return (
-                                    <button key={r.name} onClick={() => handleToggleRole(m.id, r.name)} className={`w-full text-left px-2.5 py-1.5 rounded text-[10px] font-bold flex justify-between ${has ? 'bg-red-600/20 text-red-400' : 'text-neutral-400 hover:bg-neutral-800'}`}>
+                                    <button key={r.name} onClick={() => handleToggleRole(m.id, r.name)} className={`w-full text-left px-3 py-2 rounded-xl text-[11px] font-bold flex justify-between items-center transition ${has ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}>
                                       <span>{r.name}</span><span>{has ? '✓' : '+'}</span>
                                     </button>
                                   );
                                 })}
                               </div>
                             )}
+                          </td>
+                          <td className="p-4 text-center">
+                            <button onClick={() => handleKickMembro(m)} className="bg-red-950/60 hover:bg-red-900 text-red-400 border border-red-800/60 px-3.5 py-2 rounded-xl font-bold text-[11px] shadow-sm transition">
+                              🥾 Kick (Ex-Membro)
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -817,42 +935,60 @@ export default function App() {
 
               {adminTab === 'punicoes' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <form onSubmit={handleAplicarPunicao} className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4">
-                    <h3 className="text-sm font-black text-red-500 uppercase">Aplicar Punição a Membro</h3>
-                    <select value={formPunicao.targetUserId} onChange={e => setFormPunicao({...formPunicao, targetUserId: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required>
+                  <form onSubmit={handleAplicarPunicao} className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
+                    <h3 className="text-sm font-black text-red-500 uppercase tracking-wider">Aplicar Punição / Castigo</h3>
+                    <select value={formPunicao.targetUserId} onChange={e => setFormPunicao({...formPunicao, targetUserId: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required>
                       <option value="">Seleciona o membro...</option>
                       {usersList.map(u => <option key={u.id} value={u.id}>{u.nomeInGame || u.username} (@{u.username})</option>)}
                     </select>
-                    <select value={formPunicao.tipo} onChange={e => setFormPunicao({...formPunicao, tipo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white">
+                    <select value={formPunicao.tipo} onChange={e => setFormPunicao({...formPunicao, tipo: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none">
                       <option value="Warning 1">Warning 1</option>
                       <option value="Warning 2">Warning 2</option>
                       <option value="Muted">Mute Temporário</option>
                       <option value="Ban Temporário">Ban Temporário</option>
                       <option value="Ban Perma">Ban Permanente</option>
                     </select>
-                    <input type="text" placeholder="Duração (ex: 3 dias / Permanente)" value={formPunicao.tempo} onChange={e => setFormPunicao({...formPunicao, tempo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white" required />
-                    <textarea placeholder="Motivo da punição..." value={formPunicao.motivo} onChange={e => setFormPunicao({...formPunicao, motivo: e.target.value})} className="w-full bg-neutral-900 border border-neutral-800 p-3 rounded-xl text-xs text-white h-24" required></textarea>
-                    <button type="submit" className="w-full bg-red-600 text-white font-bold py-3.5 rounded-xl text-xs uppercase">Aplicar Punição</button>
+                    <input type="text" placeholder="Duração (ex: 3 dias / Permanente)" value={formPunicao.tempo} onChange={e => setFormPunicao({...formPunicao, tempo: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white focus:border-red-500 outline-none" required />
+                    <textarea placeholder="Motivo detalhado da punição..." value={formPunicao.motivo} onChange={e => setFormPunicao({...formPunicao, motivo: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-3.5 rounded-xl text-xs text-white h-24 focus:border-red-500 outline-none resize-none" required></textarea>
+                    <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition">Aplicar Punição</button>
                   </form>
 
-                  {/* REVOGAR BANIMENTOS / KICKS */}
-                  <div className="bg-[#121418] border border-neutral-800 p-8 rounded-2xl space-y-4">
-                    <h3 className="text-sm font-black text-emerald-400 uppercase">Restaurar Acesso (Unban / Unkick)</h3>
-                    <p className="text-xs text-neutral-400">Utilizadores banidos, rejeitados ou kikados:</p>
+                  {/* REVOGAÇÃO DE CASTIGOS & BANS */}
+                  <div className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
+                    <h3 className="text-sm font-black text-emerald-400 uppercase tracking-wider">Revogar Castigos, Bans e Avisos</h3>
+                    <p className="text-xs text-zinc-400">Lista de jogadores com castigos ou banimentos ativos:</p>
                     
-                    <div className="space-y-3 max-h-80 overflow-y-auto">
-                      {usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado' || u.estado === 'kicked').length === 0 ? (
-                        <div className="text-xs text-neutral-500 bg-neutral-900/60 p-4 rounded-xl text-center">Nenhum membro com restrições de acesso.</div>
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {usersList.filter(u => (u.punicoes && u.punicoes.length > 0) || u.estado === 'banido').length === 0 ? (
+                        <div className="text-xs text-zinc-500 bg-zinc-900/60 p-6 rounded-xl text-center border border-zinc-800">Nenhum castigo ou banimento registado.</div>
                       ) : (
-                        usersList.filter(u => u.estado === 'banido' || u.estado === 'rejeitado' || u.estado === 'kicked').map(restricted => (
-                          <div key={restricted.id} className="bg-neutral-900 p-4 rounded-xl flex justify-between items-center border border-neutral-800">
-                            <div>
-                              <h4 className="font-bold text-white text-xs">{restricted.nomeInGame || restricted.username}</h4>
-                              <span className="text-[10px] text-red-400 uppercase font-bold">Estado: {restricted.estado}</span>
+                        usersList.filter(u => (u.punicoes && u.punicoes.length > 0) || u.estado === 'banido').map(punished => (
+                          <div key={punished.id} className="bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 space-y-3">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <h4 className="font-black text-white text-xs">{punished.nomeInGame || punished.username}</h4>
+                                <span className="text-[10px] text-red-400 uppercase font-extrabold">Estado: {punished.estado}</span>
+                              </div>
+                              {punished.estado === 'banido' && (
+                                <button onClick={() => handleRevogarPunicao(punished.id, null)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg uppercase shadow-sm transition">
+                                  Desbanir Jogador
+                                </button>
+                              )}
                             </div>
-                            <button onClick={() => handleRevogarBan(restricted)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg uppercase">
-                              Restaurar Acesso
-                            </button>
+                            {punished.punicoes && punished.punicoes.length > 0 && (
+                              <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                                {punished.punicoes.map((p) => (
+                                  <div key={p.id} className="flex justify-between items-center bg-black/40 p-2.5 rounded-lg border border-zinc-800/60 text-[11px]">
+                                    <div>
+                                      <strong className="text-red-400">{p.tipo}:</strong> <span className="text-zinc-300">{p.motivo}</span>
+                                    </div>
+                                    <button onClick={() => handleRevogarPunicao(punished.id, p.id)} className="bg-red-950/80 hover:bg-red-900 text-red-400 border border-red-800 px-2.5 py-1 rounded font-bold text-[10px] transition">
+                                      Revogar
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))
                       )}
@@ -862,11 +998,11 @@ export default function App() {
               )}
 
               {adminTab === 'logs' && (
-                <div className="bg-[#121418] border border-neutral-800 p-6 rounded-2xl space-y-3 max-h-96 overflow-y-auto">
+                <div className="bg-[#101216] border border-zinc-800/80 p-6 rounded-2xl space-y-3 max-h-[30rem] overflow-y-auto shadow-xl">
                   {logsList.map(l => (
-                    <div key={l.id} className="text-xs p-3 bg-neutral-900/60 rounded-xl flex justify-between border border-neutral-800">
-                      <div><strong className="text-red-400">[{l.acao}]</strong> <span className="text-white font-bold">{l.autor}:</span> <span className="text-neutral-300">{l.detalhe}</span></div>
-                      <span className="text-[10px] text-neutral-500">{l.timestamp}</span>
+                    <div key={l.id} className="text-xs p-3.5 bg-zinc-900/80 rounded-xl flex justify-between items-center border border-zinc-800/80">
+                      <div><strong className="text-red-400 font-extrabold">[{l.acao}]</strong> <span className="text-white font-bold">{l.autor}:</span> <span className="text-zinc-300">{l.detalhe}</span></div>
+                      <span className="text-[10px] text-zinc-500 font-bold shrink-0 ml-4">{l.timestamp}</span>
                     </div>
                   ))}
                 </div>
