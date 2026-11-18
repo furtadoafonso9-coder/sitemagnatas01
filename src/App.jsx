@@ -26,7 +26,7 @@ import { DEFAULT_ROLES, ROLE_COLORS, NAV_ITEMS, DEFAULT_AVATAR } from './constan
 import { formatDateTime, getRoleColor, getMemberName, matchesMember } from './utils';
 
 /* -------------------------------------------------------------------------- */
-/* MAGNATAS 01! — COMMUNITY PORTAL (CORREÇÃO DE PESQUISA DE PUNIÇÕES E CARGOS) */
+/* MAGNATAS 01! — COMMUNITY PORTAL (PERMISSÕES DE SUPORTE E ESTATÍSTICAS)     */
 /* -------------------------------------------------------------------------- */
 
 function StatusPill({ status }) {
@@ -112,7 +112,6 @@ export default function App() {
   const [adminMemberRole, setAdminMemberRole] = useState('todos');
   const [applicationSearch, setApplicationSearch] = useState('');
   
-  // Novo estado para pesquisa de membro ao aplicar punição ou notas
   const [punishmentMemberSearch, setPunishmentMemberSearch] = useState('');
   const [noteMemberSearch, setNoteMemberSearch] = useState('');
 
@@ -145,6 +144,10 @@ export default function App() {
 
   const userRoles = userDoc?.roles || [];
   const isFounder = userRoles.includes('01 Founder´s') || userRoles.includes('OWNER');
+  
+  // Verificação específica para o cargo de Support (ou Founder/Owner)
+  const isSupportOrHigher = isFounder || userRoles.some(r => r.toLowerCase().includes('support') || r.toLowerCase().includes('suporte'));
+
   const userPermissionSet = useMemo(() => new Set(
     allRoles.filter(role => userRoles.includes(role.name)).flatMap(role => role.permissions || [])
   ), [allRoles, userDoc]);
@@ -152,7 +155,6 @@ export default function App() {
   const hasPermission = useCallback(permission => isFounder || userPermissionSet.has(permission), [isFounder, userPermissionSet]);
   const canReadMembers = isFounder || userPermissionSet.has('members.view') || userPermissionSet.has('applications.view') || userPermissionSet.has('notes.view') || userPermissionSet.has('punishments.view');
   const canReadLogs = isFounder || userPermissionSet.has('logs.view');
-  const canManageRoles = true; // Liberado o painel de cargos para evitar ecrãs pretos ou bloqueios
   const currentUsername = userDoc?.username || user?.email || 'Utilizador';
   const unreadNotifications = notifications.filter(item => !(item.readBy || []).includes(user?.uid));
 
@@ -185,8 +187,8 @@ export default function App() {
         setUserDoc(defaultNewUser);
       }
     } catch (error) {
-      console.error('Erro ao carregar documento do utilizador:', error);
-      setAuthError(`Erro ao carregar dados do utilizador: ${error.message}`);
+      console.error('Erro ao carregar documento:', error);
+      setAuthError(`Erro ao carregar dados: ${error.message}`);
     }
   };
 
@@ -257,7 +259,7 @@ export default function App() {
         createdAt: serverTimestamp()
       });
     } catch (error) {
-      console.error('Não foi possível registar a ação:', error);
+      console.error('Erro ao registar log:', error);
     }
   };
 
@@ -272,7 +274,7 @@ export default function App() {
         createdAt: serverTimestamp()
       });
     } catch (error) {
-      console.error('Não foi possível criar a notificação:', error);
+      console.error('Erro ao criar notificação:', error);
     }
   };
 
@@ -324,7 +326,7 @@ export default function App() {
       setUserDoc(null);
       setCurrentView('dashboard');
     } catch (error) {
-      setAuthError(`Não foi possível terminar a sessão: ${error.message}`);
+      setAuthError(`Erro ao terminar sessão: ${error.message}`);
     }
   };
 
@@ -338,7 +340,7 @@ export default function App() {
     }
     const reader = new FileReader();
     reader.onloadend = () => callback(reader.result);
-    reader.onerror = () => window.alert('Não foi possível carregar a imagem.');
+    reader.onerror = () => window.alert('Erro ao carregar a imagem.');
     reader.readAsDataURL(file);
   };
 
@@ -352,7 +354,7 @@ export default function App() {
       await addLog('Perfil', 'Atualizou o próprio perfil.');
       window.alert('Perfil atualizado com sucesso.');
     } catch (error) {
-      window.alert(`Não foi possível atualizar o perfil: ${error.message}`);
+      window.alert(`Erro ao atualizar perfil: ${error.message}`);
     }
   };
 
@@ -368,7 +370,7 @@ export default function App() {
       });
       window.alert('Candidatura submetida com sucesso.');
     } catch (error) {
-      window.alert(`Não foi possível submeter a candidatura: ${error.message}`);
+      window.alert(`Erro ao submeter candidatura: ${error.message}`);
     }
   };
 
@@ -376,33 +378,33 @@ export default function App() {
     try {
       await updateDoc(doc(db, 'users', user.uid), { estado: 'pendente_candidatura' });
     } catch (error) {
-      window.alert(`Não foi possível reabrir a candidatura: ${error.message}`);
+      window.alert(`Erro ao reabrir candidatura: ${error.message}`);
     }
   };
 
   const handleAprovarCandidatura = async target => {
-    if (!hasPermission('applications.review')) return window.alert('Não tens permissão para aprovar candidaturas.');
+    if (!hasPermission('applications.review')) return window.alert('Não tens permissão.');
     try {
       await updateDoc(doc(db, 'users', target.id), { estado: 'aprovado', candidaturaDecididaEm: serverTimestamp(), candidaturaDecididaPor: currentUsername });
-      await addLog('Candidatura aprovada', `Aprovou ${target.username} (ID In-Game: ${target.idInGame || 'não indicado'}).`);
+      await addLog('Candidatura aprovada', `Aprovou ${target.username} (ID In-Game: ${target.idInGame || '—'}).`);
       await createNotification('Candidatura aprovada', `A candidatura de ${getMemberName(target)} foi aprovada.`, 'success');
     } catch (error) {
-      window.alert(`Não foi possível aprovar: ${error.message}`);
+      window.alert(`Erro ao aprovar: ${error.message}`);
     }
   };
 
   const handleReprovarCandidatura = async target => {
-    if (!hasPermission('applications.review')) return window.alert('Não tens permissão para rejeitar candidaturas.');
+    if (!hasPermission('applications.review')) return window.alert('Não tens permissão.');
     try {
       await updateDoc(doc(db, 'users', target.id), { estado: 'rejeitado', candidaturaDecididaEm: serverTimestamp(), candidaturaDecididaPor: currentUsername });
-      await addLog('Candidatura rejeitada', `Rejeitou ${target.username} (ID In-Game: ${target.idInGame || 'não indicado'}).`);
+      await addLog('Candidatura rejeitada', `Rejeitou ${target.username}.`);
     } catch (error) {
-      window.alert(`Não foi possível rejeitar: ${error.message}`);
+      window.alert(`Erro ao rejeitar: ${error.message}`);
     }
   };
 
   const handleEditMember = async target => {
-    if (!hasPermission('members.edit')) return window.alert('Não tens permissão para editar membros.');
+    if (!hasPermission('members.edit')) return window.alert('Não tens permissão.');
     const nomeInGame = window.prompt('Nome In-Game:', target.nomeInGame || '');
     if (nomeInGame === null) return;
     const discordTag = window.prompt('Nome/Tag do Discord:', target.discordTag || '');
@@ -411,24 +413,24 @@ export default function App() {
     if (idInGame === null) return;
     try {
       await updateDoc(doc(db, 'users', target.id), { nomeInGame: nomeInGame.trim(), discordTag: discordTag.trim(), idInGame: idInGame.trim() });
-      await addLog('Membros', `Editou os dados de ${target.username}. ID In-Game: ${idInGame.trim() || 'não indicado'}.`);
+      await addLog('Membros', `Editou os dados de ${target.username}. ID In-Game: ${idInGame.trim() || '—'}.`);
     } catch (error) {
-      window.alert(`Não foi possível editar o membro: ${error.message}`);
+      window.alert(`Erro ao editar membro: ${error.message}`);
     }
   };
 
   const handleToggleHighlight = async target => {
-    if (!hasPermission('members.highlight')) return window.alert('Não tens permissão para destacar membros.');
+    if (!hasPermission('members.highlight')) return window.alert('Não tens permissão.');
     try {
       await updateDoc(doc(db, 'users', target.id), { destacado: !target.destacado });
       await addLog('Membros', `${target.destacado ? 'Removeu destaque de' : 'Destacou'} ${target.username}.`);
     } catch (error) {
-      window.alert(`Não foi possível alterar o destaque: ${error.message}`);
+      window.alert(`Erro ao alterar destaque: ${error.message}`);
     }
   };
 
   const handleKickMembro = async target => {
-    if (!hasPermission('members.remove')) return window.alert('Não tens permissão para remover membros.');
+    if (!hasPermission('members.remove')) return window.alert('Não tens permissão.');
     const motivoKick = window.prompt(`Motivo da remoção de ${target.username}:`, 'Reestruturação / Inatividade');
     if (!motivoKick?.trim()) return;
     const kick = {
@@ -439,7 +441,7 @@ export default function App() {
       await updateDoc(doc(db, 'users', target.id), { estado: 'ex_membro', punicoes: [...(target.punicoes || []), kick] });
       await addLog('Remoção de membro', `Removeu ${target.username}. Motivo: ${motivoKick.trim()}.`);
     } catch (error) {
-      window.alert(`Não foi possível remover o membro: ${error.message}`);
+      window.alert(`Erro ao remover membro: ${error.message}`);
     }
   };
 
@@ -454,7 +456,7 @@ export default function App() {
       setFormNota({ targetUserId: '', texto: '' });
       await addLog('Nota interna', `Adicionou uma nota a ${getMemberName(target)}.`);
     } catch (error) {
-      window.alert(`Não foi possível guardar a nota: ${error.message}`);
+      window.alert(`Erro ao guardar nota: ${error.message}`);
     }
   };
 
@@ -466,7 +468,7 @@ export default function App() {
       setFormRoupa({ nome: '', numero: '', imagem: '' });
       await addLog('Roupas e kits', `Adicionou o kit ${formRoupa.nome}.`);
     } catch (error) {
-      window.alert(`Não foi possível guardar o kit: ${error.message}`);
+      window.alert(`Erro ao guardar kit: ${error.message}`);
     }
   };
 
@@ -476,7 +478,7 @@ export default function App() {
       await deleteDoc(doc(db, 'roupas', id));
       await addLog('Roupas e kits', 'Eliminou um kit.');
     } catch (error) {
-      window.alert(`Não foi possível eliminar o kit: ${error.message}`);
+      window.alert(`Erro ao eliminar kit: ${error.message}`);
     }
   };
 
@@ -488,7 +490,7 @@ export default function App() {
       setFormRadio({ titulo: '', frequencia: '', info: '' });
       await addLog('Rádio', `Adicionou a frequência ${formRadio.titulo}.`);
     } catch (error) {
-      window.alert(`Não foi possível guardar a frequência: ${error.message}`);
+      window.alert(`Erro ao guardar frequência: ${error.message}`);
     }
   };
 
@@ -498,7 +500,7 @@ export default function App() {
       await deleteDoc(doc(db, 'radios', id));
       await addLog('Rádio', 'Eliminou uma frequência.');
     } catch (error) {
-      window.alert(`Não foi possível eliminar a frequência: ${error.message}`);
+      window.alert(`Erro ao eliminar frequência: ${error.message}`);
     }
   };
 
@@ -510,7 +512,7 @@ export default function App() {
       setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 1 });
       await addLog('Regras', `Adicionou a regra ${formRegra.titulo}.`);
     } catch (error) {
-      window.alert(`Não foi possível guardar a regra: ${error.message}`);
+      window.alert(`Erro ao guardar regra: ${error.message}`);
     }
   };
 
@@ -520,7 +522,7 @@ export default function App() {
       await deleteDoc(doc(db, 'regras', id));
       await addLog('Regras', 'Eliminou uma regra.');
     } catch (error) {
-      window.alert(`Não foi possível eliminar a regra: ${error.message}`);
+      window.alert(`Erro ao eliminar regra: ${error.message}`);
     }
   };
 
@@ -533,7 +535,7 @@ export default function App() {
       setFormAviso({ titulo: '', mensagem: '', importancia: 'Normal' });
       await addLog('Avisos', `Publicou o aviso ${formAviso.titulo}.`);
     } catch (error) {
-      window.alert(`Não foi possível publicar o aviso: ${error.message}`);
+      window.alert(`Erro ao publicar aviso: ${error.message}`);
     }
   };
 
@@ -541,9 +543,9 @@ export default function App() {
     if (!hasPermission('notices.manage')) return;
     try {
       await deleteDoc(doc(db, 'avisos_staff', id));
-      await addLog('Avisos', 'Eliminou um aviso da Staff.');
+      await addLog('Avisos', 'Eliminou um aviso.');
     } catch (error) {
-      window.alert(`Não foi possível eliminar o aviso: ${error.message}`);
+      window.alert(`Erro ao eliminar aviso: ${error.message}`);
     }
   };
 
@@ -563,7 +565,7 @@ export default function App() {
       setFormPunicao({ targetUserId: '', tipo: 'Warning 1', tempo: '', motivo: '' });
       setPunishmentMemberSearch('');
     } catch (error) {
-      window.alert(`Não foi possível aplicar a punição: ${error.message}`);
+      window.alert(`Erro ao aplicar punição: ${error.message}`);
     }
   };
 
@@ -573,7 +575,7 @@ export default function App() {
     try {
       if (punicaoId === 'BAN_OU_ESTADO') {
         const hasBan = (targetUser.punicoes || []).some(item => String(item.tipo || '').toLowerCase().includes('ban'));
-        if (hasBan) return window.alert('Remove primeiro a punição de ban correspondente antes de alterar o estado.');
+        if (hasBan) return window.alert('Remove primeiro a punição de ban correspondente.');
         const nextState = acaoDestino === 'entrar' ? 'aprovado' : 'pendente_candidatura';
         await updateDoc(doc(db, 'users', targetUser.id), { estado: nextState });
         await addLog('Revogação', `Alterou o estado de ${targetUser.username} para ${nextState}.`);
@@ -587,7 +589,7 @@ export default function App() {
       }
       setModalRevocar(null);
     } catch (error) {
-      window.alert(`Não foi possível revogar a punição: ${error.message}`);
+      window.alert(`Erro ao revogar: ${error.message}`);
     }
   };
 
@@ -602,14 +604,24 @@ export default function App() {
       setSelectedMember(selected => selected?.id === targetId ? { ...selected, roles: updated } : selected);
       await addLog('Cargos', `${current.includes(roleName) ? 'Removeu' : 'Atribuiu'} o cargo ${roleName} a ${target.username}.`);
     } catch (error) {
-      window.alert(`Não foi possível atualizar os cargos: ${error.message}`);
+      window.alert(`Erro ao atualizar cargos: ${error.message}`);
     }
   };
 
   const openRoleEditor = role => {
-    setSelectedRoleId(role?.id || null);
-    setRoleForm({ name: role?.name || '', description: role?.description || '', color: getRoleColor(role), permissions: role?.permissions || [] });
-    setShowRoleEditor(true);
+    try {
+      setSelectedRoleId(role?.id || null);
+      setRoleForm({
+        name: role?.name || '',
+        description: role?.description || '',
+        color: role?.color || getRoleColor(role) || 'red',
+        permissions: Array.isArray(role?.permissions) ? [...role.permissions] : []
+      });
+      setShowRoleEditor(true);
+    } catch (err) {
+      console.error('Erro ao abrir editor de cargos:', err);
+      window.alert('Não foi possível abrir o editor de cargos.');
+    }
   };
 
   const handleSaveRole = async event => {
@@ -622,34 +634,39 @@ export default function App() {
     const payload = {
       name: cleanName,
       description: roleForm.description.trim(),
-      color: roleForm.color,
-      permissions: roleForm.permissions,
+      color: roleForm.color || 'red',
+      permissions: Array.isArray(roleForm.permissions) ? roleForm.permissions : [],
       protected: Boolean(selectedRole?.protected),
       updatedAt: serverTimestamp(),
       updatedBy: currentUsername
     };
     try {
-      if (selectedRoleId && customRoles.some(role => role.id === selectedRoleId)) await setDoc(doc(db, 'roles', selectedRoleId), payload, { merge: true });
-      else if (selectedRoleId && selectedRoleId.startsWith('legacy_')) await setDoc(doc(db, 'roles', selectedRoleId), payload, { merge: true });
-      else await addDoc(collection(db, 'roles'), { ...payload, createdAt: serverTimestamp(), createdBy: currentUsername });
+      if (selectedRoleId && customRoles.some(role => role.id === selectedRoleId)) {
+        await setDoc(doc(db, 'roles', selectedRoleId), payload, { merge: true });
+      } else if (selectedRoleId && selectedRoleId.startsWith('legacy_')) {
+        await setDoc(doc(db, 'roles', selectedRoleId), payload, { merge: true });
+      } else {
+        await addDoc(collection(db, 'roles'), { ...payload, createdAt: serverTimestamp(), createdBy: currentUsername });
+      }
       await addLog('Gestão de cargos', `${selectedRoleId ? 'Atualizou' : 'Criou'} o cargo ${cleanName}.`);
       setShowRoleEditor(false);
       setSelectedRoleId(null);
       setRoleForm({ name: '', description: '', color: 'red', permissions: [] });
     } catch (error) {
+      console.error('Erro ao guardar cargo:', error);
       window.alert(`Não foi possível guardar o cargo: ${error.message}`);
     }
   };
 
   const handleDeleteRole = async role => {
     if (role.protected || DEFAULT_ROLES.some(item => item.name === role.name)) return window.alert('Os cargos base do sistema não podem ser eliminados.');
-    if (usersList.some(member => (member.roles || []).includes(role.name))) return window.alert('Este cargo ainda está atribuído a membros. Retira-o primeiro.');
+    if (usersList.some(member => (member.roles || []).includes(role.name))) return window.alert('Este cargo ainda está atribuído a membros.');
     if (!window.confirm(`Eliminar o cargo ${role.name}?`)) return;
     try {
       await deleteDoc(doc(db, 'roles', role.id));
       await addLog('Gestão de cargos', `Eliminou o cargo ${role.name}.`);
     } catch (error) {
-      window.alert(`Não foi possível eliminar o cargo: ${error.message}`);
+      window.alert(`Erro ao eliminar cargo: ${error.message}`);
     }
   };
 
@@ -665,7 +682,7 @@ export default function App() {
     try {
       await updateDoc(doc(db, 'notificacoes', notificationId), { readBy: arrayUnion(user.uid) });
     } catch (error) {
-      console.error('Não foi possível marcar a notificação como lida:', error);
+      console.error('Erro ao marcar notificação:', error);
     }
   };
 
@@ -679,11 +696,11 @@ export default function App() {
     if (!formEvento.titulo.trim() || !formEvento.data || !formEvento.hora) return window.alert('Preenche o título, a data e a hora.');
     try {
       await addDoc(collection(db, 'eventos'), { ...formEvento, autor: currentUsername, createdAt: serverTimestamp() });
-      await createNotification('Novo evento: ' + formEvento.titulo, `${formEvento.data} às ${formEvento.hora} — ${formEvento.descricao || 'Consulta o calendário para mais informações.'}`, 'event');
+      await createNotification('Novo evento: ' + formEvento.titulo, `${formEvento.data} às ${formEvento.hora} — ${formEvento.descricao || 'Consulta o calendário.'}`, 'event');
       await addLog('Calendário', `Criou o evento ${formEvento.titulo}.`);
       setFormEvento({ titulo: '', descricao: '', data: '', hora: '', tipo: 'Reunião' });
     } catch (error) {
-      window.alert(`Não foi possível criar o evento: ${error.message}`);
+      window.alert(`Erro ao criar evento: ${error.message}`);
     }
   };
 
@@ -694,7 +711,7 @@ export default function App() {
       await deleteDoc(doc(db, 'eventos', eventItem.id));
       await addLog('Calendário', `Eliminou o evento ${eventItem.titulo}.`);
     } catch (error) {
-      window.alert(`Não foi possível eliminar o evento: ${error.message}`);
+      window.alert(`Erro ao eliminar evento: ${error.message}`);
     }
   };
 
@@ -777,10 +794,10 @@ export default function App() {
           </button>
           <div className="application-card">
             <div className="application-brand"><div className="brand-mark small">M</div><div><strong>MAGNATAS 01!</strong><span>Portal da Comunidade</span></div><button className="button button-quiet" onClick={handleLogout}>Sair</button></div>
-            {userDoc.estado === 'pendente_analise' && <div className="application-state"><div className="state-symbol amber">◷</div><StatusPill status="pendente_analise"/><h2>Candidatura submetida</h2><p>A tua candidatura está a ser analisada pela equipa responsável. Podes sair e voltar mais tarde para consultar o estado.</p><div className="application-summary"><span>Nome In-Game <strong>{userDoc.nomeInGame || '—'}</strong></span><span>ID In-Game <strong>{userDoc.idInGame || 'Não indicado'}</strong></span><span>Discord <strong>{userDoc.discordTag || '—'}</strong></span></div></div>}
-            {(userDoc.estado === 'rejeitado' || userDoc.estado === 'ex_membro') && <div className="application-state"><div className="state-symbol red">!</div><StatusPill status={userDoc.estado}/><h2>{userDoc.estado === 'rejeitado' ? 'Candidatura não aprovada' : 'Registo de ex-membro'}</h2><p>{userDoc.estado === 'rejeitado' ? 'A tua candidatura não foi aprovada. Podes voltar a submeter os teus dados para uma nova análise.' : 'O teu registo encontra-se como ex-membro. Podes solicitar uma nova candidatura.'}</p><button className="button button-primary" onClick={handleResetCandidatura}>Submeter nova candidatura</button></div>}
-            {userDoc.estado === 'banido' && <div className="application-state"><div className="state-symbol red">×</div><StatusPill status="banido"/><h2>Conta temporariamente indisponível</h2><p>A tua conta encontra-se banida. Contacta a administração através dos canais oficiais para obteres esclarecimentos.</p></div>}
-            {userDoc.estado === 'pendente_candidatura' && <div className="application-form-wrap"><div className="auth-eyebrow">CANDIDATURA DE MEMBRO</div><h2>Faz parte dos Magnatas</h2><p>Preenche os teus dados com atenção. A equipa irá analisar a candidatura.</p><form onSubmit={handleSubmitCandidatura} className="application-form">
+            {userDoc.estado === 'pendente_analise' && <div className="application-state"><div className="state-symbol amber">◷</div><StatusPill status="pendente_analise"/><h2>Candidatura submetida</h2><p>A tua candidatura está a ser analisada pela equipa responsável.</p><div className="application-summary"><span>Nome In-Game <strong>{userDoc.nomeInGame || '—'}</strong></span><span>ID In-Game <strong>{userDoc.idInGame || 'Não indicado'}</strong></span><span>Discord <strong>{userDoc.discordTag || '—'}</strong></span></div></div>}
+            {(userDoc.estado === 'rejeitado' || userDoc.estado === 'ex_membro') && <div className="application-state"><div className="state-symbol red">!</div><StatusPill status={userDoc.estado}/><h2>{userDoc.estado === 'rejeitado' ? 'Candidatura não aprovada' : 'Registo de ex-membro'}</h2><p>Podes voltar a submeter os teus dados para uma nova análise.</p><button className="button button-primary" onClick={handleResetCandidatura}>Submeter nova candidatura</button></div>}
+            {userDoc.estado === 'banido' && <div className="application-state"><div className="state-symbol red">×</div><StatusPill status="banido"/><h2>Conta temporariamente indisponível</h2><p>A tua conta encontra-se banida.</p></div>}
+            {userDoc.estado === 'pendente_candidatura' && <div className="application-form-wrap"><div className="auth-eyebrow">CANDIDATURA DE MEMBRO</div><h2>Faz parte dos Magnatas</h2><p>Preenche os teus dados com atenção.</p><form onSubmit={handleSubmitCandidatura} className="application-form">
               <label className="field"><span>Idade</span><input value={formCandidatura.idade} onChange={event => setFormCandidatura({ ...formCandidatura, idade: event.target.value })} required /></label>
               <label className="field"><span>Nome In-Game</span><input value={formCandidatura.nomeInGame} onChange={event => setFormCandidatura({ ...formCandidatura, nomeInGame: event.target.value })} required /></label>
               <label className="field"><span>Discord</span><input value={formCandidatura.discordTag} onChange={event => setFormCandidatura({ ...formCandidatura, discordTag: event.target.value })} placeholder="Nome do Discord" required /></label>
@@ -851,7 +868,15 @@ export default function App() {
             {currentView === 'dashboard' && <section className="page-section animate-in">
               <div className="welcome-banner"><div><span className="eyebrow light">COMMUNITY OVERVIEW</span><h1>Olá, {getMemberName(userDoc).split(' ')[0]}.</h1><p>Este é o centro de informação e atividade da comunidade Magnatas 01!.</p></div><div className="welcome-mark">M<span>01!</span></div></div>
               <div className="section-heading"><div><span className="eyebrow">VISÃO GERAL</span><h2>Resumo da comunidade</h2><p>Indicadores e informações importantes num só lugar.</p></div><span className="date-chip">{new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
-              <div className="stats-grid"><StatCard label="Membros registados" value={stats.total} detail="Total de contas" icon="♧" tone="red"/><StatCard label="Membros ativos" value={stats.active} detail="Aprovados e disponíveis" icon="✓" tone="green"/><StatCard label="Candidaturas" value={stats.pending} detail="Aguardam análise" icon="◷" tone="amber"/><StatCard label="Ausentes" value={stats.absent} detail="Marcados como ausentes" icon="◌" tone="blue"/></div>
+              
+              {/* ESTATÍSTICAS CONDICIONADAS: Apenas Support vê Contas Registadas e Candidaturas */}
+              <div className="stats-grid">
+                {isSupportOrHigher && <StatCard label="Membros registados" value={stats.total} detail="Total de contas" icon="♧" tone="red"/>}
+                <StatCard label="Membros ativos" value={stats.active} detail="Aprovados e disponíveis" icon="✓" tone="green"/>
+                {isSupportOrHigher && <StatCard label="Candidaturas" value={stats.pending} detail="Aguardam análise" icon="◷" tone="amber"/>}
+                <StatCard label="Ausentes" value={stats.absent} detail="Marcados como ausentes" icon="◌" tone="blue"/>
+              </div>
+
               <div className="dashboard-columns"><div className="panel"><div className="panel-heading"><div><h3>Últimos comunicados</h3><p>Informações publicadas pela equipa.</p></div><button className="text-button" onClick={() => navigate('avisos')}>Ver todos →</button></div>{avisosStaff.length ? avisosStaff.slice(0, 4).map(item => <div className="feed-item" key={item.id}><div className={`feed-icon ${item.importancia === 'Urgente' ? 'urgent' : ''}`}>◉</div><div className="feed-content"><strong>{item.titulo}</strong><p>{item.mensagem}</p><small>{item.autor || 'Staff'} · {item.timestamp || formatDateTime(item.createdAt)}</small></div><span className={`priority-dot ${item.importancia === 'Urgente' ? 'urgent' : ''}`} /></div>) : <EmptyState icon="◉" title="Sem comunicados" description="Ainda não existem comunicados publicados."/>}</div>
                 <div className="panel"><div className="panel-heading"><div><h3>Próximos eventos</h3><p>Reuniões e atividades agendadas.</p></div><button className="text-button" onClick={() => navigate('calendario')}>Calendário →</button></div>{upcomingEvents.slice(0, 4).map(item => <div className="event-mini" key={item.id}><div className="event-date"><strong>{item.data?.slice(8, 10) || '—'}</strong><small>{item.data ? new Date(`${item.data}T12:00:00`).toLocaleDateString('pt-PT', { month: 'short' }) : 'DATA'}</small></div><div><strong>{item.titulo}</strong><p>{item.hora || 'Hora a definir'} · {item.tipo || 'Evento'}</p></div></div>)}{upcomingEvents.length === 0 && <EmptyState icon="▦" title="Sem eventos" description="Não existem eventos futuros agendados."/>}</div></div>
               <div className="quick-links"><button onClick={() => navigate('base')}><span>♧</span><strong>Ver comunidade</strong><small>Consultar membros e cargos</small></button><button onClick={() => navigate('notificacoes')}><span>♢</span><strong>Notificações</strong><small>{unreadNotifications.length} por ler</small></button><button onClick={() => navigate('perfil')}><span>◎</span><strong>O meu perfil</strong><small>Atualizar os teus dados</small></button></div>
@@ -875,7 +900,7 @@ export default function App() {
 
             {currentView === 'regras' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">DOCUMENTAÇÃO</span><h2>Regras Oficiais</h2><p>Consulta as normas e orientações da comunidade.</p></div></div>{hasPermission('rules.manage') && <form className="panel form-panel" onSubmit={handleAddRegra}><div className="form-grid"><label className="field"><span>Título da regra</span><input value={formRegra.titulo} onChange={event => setFormRegra({ ...formRegra, titulo: event.target.value })} required/></label><label className="field"><span>Ordem</span><input type="number" min="1" value={formRegra.ordem} onChange={event => setFormRegra({ ...formRegra, ordem: event.target.value })} required/></label><label className="field field-wide"><span>Descrição</span><textarea rows="3" value={formRegra.descricao} onChange={event => setFormRegra({ ...formRegra, descricao: event.target.value })} required/></label></div><button className="button button-primary">Adicionar regra</button></form>}<div className="rules-list">{regras.map((item, index) => <article className="rule-card" key={item.id}><span className="rule-index">{String(index + 1).padStart(2, '0')}</span><div><h3>{item.titulo}</h3><p>{item.descricao}</p></div>{hasPermission('rules.manage') && <button className="icon-button danger" onClick={() => handleDeleteRegra(item.id)}>×</button>}</article>)}</div>{regras.length === 0 && <EmptyState icon="≡" title="Sem regras publicadas" description="As regras oficiais aparecerão aqui."/>}</section>}
 
-            {currentView === 'cargos' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">ESTRUTURA DA COMUNIDADE</span><h2>Lista de Cargos</h2><p>Consulta os cargos e a quantidade de membros associados.</p></div>{canManageRoles && <button className="button button-primary" onClick={() => { setAdminTab('cargos'); navigate('admin'); openRoleEditor(null); }}>＋ Criar cargo</button>}</div><div className="role-grid">{allRoles.map(role => <article className="role-card" key={role.id}><div className={`role-symbol ${getRoleColor(role)}`}>◇</div><div className="role-card-main"><h3>{role.name}</h3><p>{role.description || (role.protected ? 'Cargo de liderança protegido.' : 'Cargo da comunidade.')}</p><small>{usersList.filter(member => (member.roles || []).includes(role.name)).length} membros</small></div><span className={`role-badge ${getRoleColor(role)}`}>{role.protected ? 'Protegido' : 'Cargo'}</span></article>)}</div></section>}
+            {currentView === 'cargos' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">ESTRUTURA DA COMUNIDADE</span><h2>Lista de Cargos</h2><p>Consulta os cargos e a quantidade de membros associados.</p></div>{hasPermission('roles.manage') && <button className="button button-primary" onClick={() => { setAdminTab('cargos'); navigate('admin'); openRoleEditor(null); }}>＋ Criar cargo</button>}</div><div className="role-grid">{allRoles.map(role => <article className="role-card" key={role.id}><div className={`role-symbol ${getRoleColor(role)}`}>◇</div><div className="role-card-main"><h3>{role.name}</h3><p>{role.description || (role.protected ? 'Cargo de liderança protegido.' : 'Cargo da comunidade.')}</p><small>{usersList.filter(member => (member.roles || []).includes(role.name)).length} membros</small></div><span className={`role-badge ${getRoleColor(role)}`}>{role.protected ? 'Protegido' : 'Cargo'}</span></article>)}</div></section>}
 
             {currentView === 'calendario' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">AGENDA DA COMUNIDADE</span><h2>Calendário de eventos</h2><p>Reuniões, alinhamentos e atividades agendadas.</p></div></div>{hasPermission('events.manage') && <form className="panel form-panel" onSubmit={handleAddEvento}><div className="panel-heading"><div><h3>Adicionar evento</h3><p>Os membros recebem uma notificação interna quando publicas um evento.</p></div></div><div className="form-grid"><label className="field"><span>Nome do evento</span><input value={formEvento.titulo} onChange={event => setFormEvento({ ...formEvento, titulo: event.target.value })} required/></label><label className="field"><span>Tipo</span><select value={formEvento.tipo} onChange={event => setFormEvento({ ...formEvento, tipo: event.target.value })}><option>Reunião</option><option>Evento</option><option>Treino</option><option>Alinhamento</option><option>Outro</option></select></label><label className="field"><span>Data</span><input type="date" value={formEvento.data} onChange={event => setFormEvento({ ...formEvento, data: event.target.value })} required/></label><label className="field"><span>Hora</span><input type="time" value={formEvento.hora} onChange={event => setFormEvento({ ...formEvento, hora: event.target.value })} required/></label><label className="field field-wide"><span>Descrição</span><textarea rows="3" value={formEvento.descricao} onChange={event => setFormEvento({ ...formEvento, descricao: event.target.value })}/></label></div><button className="button button-primary">Guardar evento</button></form>}<div className="event-list">{sortedEvents.map(item => <article className="event-card" key={item.id}><div className="event-date-large"><strong>{item.data?.slice(8, 10) || '—'}</strong><span>{item.data ? new Date(`${item.data}T12:00:00`).toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' }) : 'Data a definir'}</span></div><div className="event-details"><span className="notice-tag">{item.tipo || 'Evento'}</span><h3>{item.titulo}</h3><p>{item.descricao || 'Sem descrição adicional.'}</p><small>{item.hora || 'Hora a definir'} · Criado por {item.autor || 'Staff'}</small></div>{hasPermission('events.manage') && <button className="icon-button danger" onClick={() => handleDeleteEvento(item)}>×</button>}</article>)}</div>{sortedEvents.length === 0 && <EmptyState icon="▦" title="Calendário vazio" description="Quando forem criados eventos, aparecerão aqui."/>}</section>}
 
@@ -895,7 +920,6 @@ export default function App() {
                 <form className="panel form-panel" onSubmit={handleAplicarPunicao}>
                   <div className="panel-heading"><div><h3>Aplicar punição</h3><p>Pesquisa por nome ou ID para selecionar o membro.</p></div></div>
                   
-                  {/* SELETOR INTERATIVO COM PESQUISA POR NOME OU ID */}
                   <div className="field">
                     <span>Membro selecionado</span>
                     {formPunicao.targetUserId ? (
@@ -988,7 +1012,7 @@ export default function App() {
                 </div>
                 <label className="field"><span>Nota confidencial</span><textarea rows="5" value={formNota.texto} onChange={event => setFormNota({ ...formNota, texto: event.target.value })} required/></label><button className="button button-primary" type="submit" disabled={!formNota.targetUserId}>Guardar nota</button></form><div className="panel"><div className="panel-heading"><div><h3>Notas registadas</h3><p>Organizadas por membro.</p></div></div><div className="internal-notes-list">{usersList.filter(member => member.notasInternas?.length).map(member => <article className="note-member" key={member.id}><strong>{getMemberName(member)} <small>ID {member.idInGame || '—'}</small></strong>{member.notasInternas.map(note => <div className="note-item" key={note.id}><p>{note.texto}</p><small>{note.autor} · {note.data}</small></div>)}</article>)}{usersList.every(member => !member.notasInternas?.length) && <EmptyState icon="✎" title="Sem notas internas" description="As notas adicionadas aparecerão aqui."/>}</div></div></div>}
 
-              {adminTab === 'cargos' && <div className="roles-admin-layout"><div className="panel"><div className="panel-heading"><div><h3>Cargos existentes</h3><p>Seleciona um cargo para editar as permissões.</p></div><button className="button button-primary button-small" onClick={() => openRoleEditor(null)}>＋ Novo cargo</button></div><div className="role-admin-list">{allRoles.map(role => <div className="role-admin-row" key={role.id}><div><div className="role-list"><RoleBadge role={role.name} allRoles={allRoles}/>{role.protected && <span className="tiny-tag">Protegido</span>}</div><small>{role.description || `${(role.permissions || []).length} permissões configuradas`}</small></div><div className="row-actions"><button className="icon-button" onClick={() => openRoleEditor(role)} title="Editar cargo">✎</button>{!role.protected && !DEFAULT_ROLES.some(item => item.name === role.name) && <button className="icon-button danger" onClick={() => handleDeleteRole(role)} title="Eliminar cargo">×</button>}</div></div>)}</div></div><div className="panel role-help"><div className="help-symbol">◇</div><h3>Permissões por cargo</h3><p>As permissões são atribuídas individualmente. Um utilizador herda as permissões de todos os cargos associados à sua conta.</p><div className="help-note">Os cargos Founder e Owner estão protegidos. A validação definitiva das permissões também tem de existir nas Firebase Security Rules ou em Cloud Functions.</div></div></div>}
+              {adminTab === 'cargos' && <div className="roles-admin-layout"><div className="panel"><div className="panel-heading"><div><h3>Cargos existentes</h3><p>Seleciona um cargo para editar as permissões.</p></div><button className="button button-primary button-small" onClick={() => openRoleEditor(null)}>＋ Novo cargo</button></div><div className="role-admin-list">{allRoles.map(role => <div className="role-admin-row" key={role.id}><div><div className="role-list"><RoleBadge role={role.name} allRoles={allRoles}/>{role.protected && <span className="tiny-tag">Protegido</span>}</div><small>{role.description || `${(role.permissions || []).length} permissões configuradas`}</small></div><div className="row-actions"><button className="icon-button" onClick={() => openRoleEditor(role)} title="Editar cargo">✎</button>{!role.protected && !DEFAULT_ROLES.some(item => item.name === role.name) && <button className="icon-button danger" onClick={() => handleDeleteRole(role)} title="Eliminar cargo">×</button>}</div></div>)}</div></div><div className="panel role-help"><div className="help-symbol">◇</div><h3>Permissões por cargo</h3><p>As permissões são atribuídas individualmente. Um utilizador herda as permissões de todos os cargos associados à sua conta.</p><div className="help-note">Os cargos Founder e Owner estão protegidos.</div></div></div>}
 
               {adminTab === 'logs' && <div className="panel"><div className="panel-heading"><div><h3>Registo de atividade</h3><p>Últimas 100 ações administrativas disponíveis.</p></div></div><div className="logs-list">{logsList.map(item => <div className="log-row" key={item.id}><span className="log-dot"/><div><strong>{item.acao}</strong><p>{item.detalhe}</p><small>{item.autor}</small></div><time>{item.timestamp || formatDateTime(item.createdAt)}</time></div>)}{logsList.length === 0 && <EmptyState icon="≡" title="Sem registos" description="As ações administrativas serão registadas aqui."/>}</div></div>}
             </section>}
@@ -998,7 +1022,7 @@ export default function App() {
 
         {notificationMenuOpen && <button className="notification-backdrop" onClick={() => setNotificationMenuOpen(false)} aria-label="Fechar notificações"/>}
 
-        {selectedMember && <div className="modal-backdrop" onClick={() => setSelectedMember(null)}><div className="modal-card member-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">PERFIL DE MEMBRO</span><h2>Informações do membro</h2></div><button className="icon-button" onClick={() => setSelectedMember(null)}>×</button></div><div className="member-profile-head"><Avatar member={selectedMember} size="xl"/><div><h2>{getMemberName(selectedMember)}</h2><p>@{selectedMember.username || 'sem-utilizador'} · {selectedMember.discordTag || 'Discord não indicado'}</p><StatusPill status={selectedMember.estado}/></div></div><div className="member-detail-grid"><span><small>ID In-Game</small><strong className="id-value">{selectedMember.idInGame || 'Não indicado na candidatura'}</strong></span><span><small>Idade</small><strong>{selectedMember.idade || '—'}</strong></span><span><small>Kills</small><strong>{selectedMember.killsAtual || '—'}</strong></span><span><small>Tempo de cidade</small><strong>{selectedMember.tempoCidade || '—'}</strong></span><span><small>E-mail</small><strong>{selectedMember.email || '—'}</strong></span><span><small>Data de registo</small><strong>{formatDate(selectedMember.createdAt)}</strong></span></div><div className="member-detail-block"><small>Cargos</small><div className="role-list">{(selectedMember.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)}</div></div><div className="member-detail-block"><small>Biografia</small><p>{selectedMember.biografia || 'Sem biografia definida.'}</p></div><div className="member-detail-block"><small>Gerir cargos do membro</small><div className="role-assignment-grid">{allRoles.map(role => <button type="button" key={role.id} disabled={role.protected && !isFounder} className={`role-assignment-option ${(selectedMember.roles || []).includes(role.name) ? 'assigned' : ''}`} onClick={() => handleToggleRole(selectedMember.id, role.name)}><span className={`role-badge ${getRoleColor(role)}`}>{role.name}</span><strong>{(selectedMember.roles || []).includes(role.name) ? '✓' : '+'}</strong></button>)}</div></div><div className="member-detail-block"><small>Histórico de punições</small>{selectedMember.punicoes?.length ? selectedMember.punicoes.map((item, index) => <p className="modal-history-line" key={item.id || index}><strong>{item.tipo}</strong> — {item.motivo} <small>{item.data}</small></p>) : <p>Sem punições registadas.</p>}</div><div className="member-detail-block"><small>Notas internas da Staff</small>{selectedMember.notasInternas?.length ? selectedMember.notasInternas.map((item, index) => <p className="modal-history-line" key={item.id || index}>{item.texto}<small>{item.autor} · {item.data}</small></p>) : <p>Sem notas internas.</p>}</div><div className="modal-actions"><button className="button button-outline" onClick={() => handleEditMember(selectedMember)}>Editar dados</button><button className="button button-outline" onClick={() => handleToggleHighlight(selectedMember)}>{selectedMember.destacado ? 'Remover destaque' : 'Destacar membro'}</button>{selectedMember.estado === 'aprovado' && <button className="button button-danger-soft" onClick={() => handleKickMembro(selectedMember)}>Remover membro</button>}</div></div></div>}
+        {selectedMember && <div className="modal-backdrop" onClick={() => setSelectedMember(null)}><div className="modal-card member-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">PERFIL DE MEMBRO</span><h2>Informações do membro</h2></div><button className="icon-button" onClick={() => setSelectedMember(null)}>×</button></div><div className="member-profile-head"><Avatar member={selectedMember} size="xl"/><div><h2>{getMemberName(selectedMember)}</h2><p>@{selectedMember.username || 'sem-utilizador'} · {selectedMember.discordTag || 'Discord não indicado'}</p><StatusPill status={selectedMember.estado}/></div></div><div className="member-detail-grid"><span><small>ID In-Game</small><strong className="id-value">{selectedMember.idInGame || 'Não indicado'}</strong></span><span><small>Idade</small><strong>{selectedMember.idade || '—'}</strong></span><span><small>Kills</small><strong>{selectedMember.killsAtual || '—'}</strong></span><span><small>Tempo de cidade</small><strong>{selectedMember.tempoCidade || '—'}</strong></span><span><small>E-mail</small><strong>{selectedMember.email || '—'}</strong></span><span><small>Data de registo</small><strong>{formatDateTime(selectedMember.createdAt)}</strong></span></div><div className="member-detail-block"><small>Cargos</small><div className="role-list">{(selectedMember.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)}</div></div><div className="member-detail-block"><small>Biografia</small><p>{selectedMember.biografia || 'Sem biografia definida.'}</p></div><div className="member-detail-block"><small>Gerir cargos do membro</small><div className="role-assignment-grid">{allRoles.map(role => <button type="button" key={role.id} disabled={role.protected && !isFounder} className={`role-assignment-option ${(selectedMember.roles || []).includes(role.name) ? 'assigned' : ''}`} onClick={() => handleToggleRole(selectedMember.id, role.name)}><span className={`role-badge ${getRoleColor(role)}`}>{role.name}</span><strong>{(selectedMember.roles || []).includes(role.name) ? '✓' : '+'}</strong></button>)}</div></div><div className="member-detail-block"><small>Histórico de punições</small>{selectedMember.punicoes?.length ? selectedMember.punicoes.map((item, index) => <p className="modal-history-line" key={item.id || index}><strong>{item.tipo}</strong> — {item.motivo} <small>{item.data}</small></p>) : <p>Sem punições registadas.</p>}</div><div className="member-detail-block"><small>Notas internas da Staff</small>{selectedMember.notasInternas?.length ? selectedMember.notasInternas.map((item, index) => <p className="modal-history-line" key={item.id || index}>{item.texto}<small>{item.autor} · {item.data}</small></p>) : <p>Sem notas internas.</p>}</div><div className="modal-actions"><button className="button button-outline" onClick={() => handleEditMember(selectedMember)}>Editar dados</button><button className="button button-outline" onClick={() => handleToggleHighlight(selectedMember)}>{selectedMember.destacado ? 'Remover destaque' : 'Destacar membro'}</button>{selectedMember.estado === 'aprovado' && <button className="button button-danger-soft" onClick={() => handleKickMembro(selectedMember)}>Remover membro</button>}</div></div></div>}
 
         {showRoleEditor && <div className="modal-backdrop" onClick={() => setShowRoleEditor(false)}><div className="modal-card role-editor-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">CONFIGURAÇÃO DE ACESSO</span><h2>{selectedRoleId ? 'Editar cargo' : 'Criar cargo'}</h2></div><button className="icon-button" onClick={() => setShowRoleEditor(false)}>×</button></div><form onSubmit={handleSaveRole} className="form-stack"><label className="field"><span>Nome do cargo</span><input value={roleForm.name} onChange={event => setRoleForm({ ...roleForm, name: event.target.value })} required/></label><label className="field"><span>Descrição</span><input value={roleForm.description} onChange={event => setRoleForm({ ...roleForm, description: event.target.value })} placeholder="Responsabilidades deste cargo"/></label><label className="field"><span>Cor de identificação</span><select value={roleForm.color} onChange={event => setRoleForm({ ...roleForm, color: event.target.value })}>{ROLE_COLORS.map(color => <option key={color.value} value={color.value}>{color.label}</option>)}</select></label><div className="permissions-editor"><div className="panel-heading"><div><h3>Permissões</h3><p>Seleciona o que este cargo pode fazer.</p></div><span className="count-chip">{roleForm.permissions.length} selecionadas</span></div>{PERMISSION_GROUPS.map(group => <div className="permission-group" key={group.title}><strong>{group.title}</strong>{group.items.map(([key, label]) => <label className="permission-option" key={key}><input type="checkbox" checked={roleForm.permissions.includes(key)} onChange={() => toggleRolePermission(key)}/><span>{label}</span></label>)}</div>)}</div><div className="modal-actions"><button type="button" className="button button-outline" onClick={() => setShowRoleEditor(false)}>Cancelar</button><button className="button button-primary">Guardar cargo</button></div></form></div></div>}
 
@@ -1016,7 +1040,7 @@ const APP_STYLES = `
   --bg-surface: #ffffff;
   --bg-sidebar: #17181d;
   --text-main: #202127;
-  --text-muted: #888c96;
+  --text-muted: #787c88;
   --border-color: #e8e9ed;
   --sidebar-text: #b8bac2;
   --table-head: #fafafc;
@@ -1035,112 +1059,112 @@ body.dark-theme {
   --card-shadow: 0 4px 20px #00000040;
 }
 
-*{box-sizing:border-box}body{margin:0;background:var(--bg-main);color:var(--text-main);font-family:'DM Sans',system-ui,sans-serif;transition:background .2s ease,color .2s ease}button,input,textarea,select{font:inherit}button{cursor:pointer}
+*{box-sizing:border-box}body{margin:0;background:var(--bg-main);color:var(--text-main);font-family:'DM Sans',system-ui,sans-serif;font-size:15px;transition:background .2s ease,color .2s ease}button,input,textarea,select{font:inherit}button{cursor:pointer}
 
 .app-shell{min-height:100vh;display:flex;background:var(--bg-main)}
-.sidebar{width:258px;flex:0 0 258px;background:var(--bg-sidebar);color:#f8f8fa;display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;height:100vh;z-index:40;border-right:1px solid var(--border-color)}
+.sidebar{width:268px;flex:0 0 268px;background:var(--bg-sidebar);color:#f8f8fa;display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;height:100vh;z-index:40;border-right:1px solid var(--border-color)}
 .sidebar-brand{height:82px;display:flex;align-items:center;gap:12px;padding:0 22px;border-bottom:1px solid var(--border-color)}
 .brand-mark{width:40px;height:40px;border-radius:13px;background:#fff;color:#d62839;display:grid;place-items:center;font-family:Manrope,sans-serif;font-size:21px;font-weight:900;box-shadow:0 5px 20px #d6283922}
 .brand-mark.small{width:36px;height:36px;font-size:18px}
 .brand-copy{display:flex;flex-direction:column;gap:4px}
-.brand-copy strong{font-family:Manrope,sans-serif;font-size:13px;letter-spacing:.4px;color:#fff}
+.brand-copy strong{font-family:Manrope,sans-serif;font-size:14px;letter-spacing:.4px;color:#fff}
 .brand-copy strong span{color:#e34a57}
-.brand-copy small{font-size:9px;color:#9da0aa;letter-spacing:1.35px;font-weight:800}
+.brand-copy small{font-size:10px;color:#9da0aa;letter-spacing:1.35px;font-weight:800}
 .sidebar-nav{padding:18px 13px 20px;overflow:auto;flex:1}
 .nav-group{margin-bottom:22px}
-.nav-label{padding:0 11px;margin:0 0 9px;color:#777b86;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px}
-.nav-item{width:100%;border:1px solid transparent;background:transparent;color:var(--sidebar-text);display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;text-align:left;font-size:12px;font-weight:650;transition:background .18s ease,color .18s ease,border .18s ease;margin:3px 0}
+.nav-label{padding:0 11px;margin:0 0 9px;color:#777b86;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px}
+.nav-item{width:100%;border:1px solid transparent;background:transparent;color:var(--sidebar-text);display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;text-align:left;font-size:13px;font-weight:650;transition:background .18s ease,color .18s ease,border .18s ease;margin:3px 0}
 .nav-item:hover{background:#25262d;color:white}
 .nav-item.active{background:#3a2025;border-color:#64323a;color:#ff9ba3}
-.nav-icon{width:18px;text-align:center;font-size:15px;color:#e36a74}
-.nav-count{margin-left:auto;min-width:19px;height:19px;display:grid;place-items:center;background:#d62839;color:#fff;font-size:10px;border-radius:20px;font-style:normal}
+.nav-icon{width:18px;text-align:center;font-size:16px;color:#e36a74}
+.nav-count{margin-left:auto;min-width:19px;height:19px;display:grid;place-items:center;background:#d62839;color:#fff;font-size:11px;border-radius:20px;font-style:normal}
 .sidebar-bottom{padding:14px;border-top:1px solid var(--border-color)}
 .sidebar-user{display:flex;align-items:center;gap:10px;padding:8px 5px}
 .sidebar-user-copy{min-width:0;display:flex;flex-direction:column;flex:1;gap:3px}
-.sidebar-user-copy strong{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff}
-.sidebar-user-copy small{font-size:10px;color:#999ca6}
+.sidebar-user-copy strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fff}
+.sidebar-user-copy small{font-size:11px;color:#999ca6}
 .sidebar-user>button{border:0;background:transparent;color:#aaa;font-size:20px}
 .sidebar-actions-row{margin-top:10px;padding:0 5px}
-.theme-toggle-btn{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#cbd0d9;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .2s}
+.theme-toggle-btn{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#cbd0d9;padding:9px 12px;border-radius:8px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .2s}
 .theme-toggle-btn:hover{background:rgba(255,255,255,0.12);color:#fff}
-.theme-toggle-floating{position:fixed;top:20px;right:20px;z-index:100;background:var(--bg-surface);border:1px solid var(--border-color);color:var(--text-main);width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,0.1)}
-.sidebar-version{text-align:center;color:#656975;font-size:8px;font-weight:800;letter-spacing:1px;margin-top:10px}
+.theme-toggle-floating{position:fixed;top:20px;right:20px;z-index:100;background:var(--bg-surface);border:1px solid var(--border-color);color:var(--text-main);width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.sidebar-version{text-align:center;color:#656975;font-size:9px;font-weight:800;letter-spacing:1px;margin-top:10px}
 
-/* ESTILOS PARA O SELETOR DE MEMBROS COM PESQUISA */
+/* SELETOR DE MEMBROS COM PESQUISA */
 .member-search-selector{position:relative;display:flex;flex-direction:column;gap:6px}
 .member-dropdown-list{position:absolute;top:100%;left:0;right:0;max-height:180px;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.15);z-index:50;margin-top:4px}
-.member-dropdown-item{width:100%;display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:transparent;border:0;border-bottom:1px solid var(--border-color);text-align:left;color:var(--text-main);cursor:pointer}
+.member-dropdown-item{width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:transparent;border:0;border-bottom:1px solid var(--border-color);text-align:left;color:var(--text-main);cursor:pointer}
 .member-dropdown-item:hover{background:rgba(214,40,57,0.08);color:#d62839}
-.member-dropdown-item small{color:var(--text-muted);font-size:9px}
-.dropdown-empty{padding:10px;text-align:center;font-size:10px;color:var(--text-muted)}
-.selected-member-pill{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg-main);border:1px solid var(--border-color);border-radius:8px;font-size:10px}
+.member-dropdown-item small{color:var(--text-muted);font-size:10px}
+.dropdown-empty{padding:10px;text-align:center;font-size:11px;color:var(--text-muted)}
+.selected-member-pill{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg-main);border:1px solid var(--border-color);border-radius:8px;font-size:11px}
 
 .main-area{min-width:0;flex:1;display:flex;flex-direction:column}
 .topbar{height:82px;background:var(--bg-surface);border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;padding:0 34px;position:sticky;top:0;z-index:20;transition:background .2s,border .2s}
 .topbar-left{display:flex;align-items:center;gap:14px}
-.breadcrumb{display:flex;align-items:center;gap:11px;color:var(--text-muted);font-size:11px;font-weight:800;letter-spacing:.8px}
+.breadcrumb{display:flex;align-items:center;gap:11px;color:var(--text-muted);font-size:12px;font-weight:800;letter-spacing:.8px}
 .breadcrumb b{color:var(--border-color)}
 .breadcrumb strong{color:#d62839}
-.page-context{font-size:10px;color:var(--text-muted);margin-top:5px}
+.page-context{font-size:11px;color:var(--text-muted);margin-top:4px}
 .topbar-actions{display:flex;align-items:center;gap:15px}
-.topbar-theme{width:auto!important;padding:6px 10px!important;background:var(--bg-main)!important;border-color:var(--border-color)!important;color:var(--text-main)!important}
-.connection-status{font-size:10px;color:var(--text-muted);display:flex;align-items:center;gap:7px}
-.connection-status i{width:7px;height:7px;border-radius:50%;background:#25a56a;box-shadow:0 0 0 4px #25a56a18}
-.notification-button{width:35px;height:35px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-surface);color:var(--text-main);font-size:19px;position:relative}
-.notification-button i{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;border-radius:20px;background:#d62839;color:#fff;font-style:normal;font-size:9px;display:grid;place-items:center}
-.topbar-avatar{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--text-main);font-size:11px;font-weight:700}
+.topbar-theme{width:auto!important;padding:7px 10px!important;background:var(--bg-main)!important;border-color:var(--border-color)!important;color:var(--text-main)!important}
+.connection-status{font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:7px}
+.connection-status i{width:8px;height:8px;border-radius:50%;background:#25a56a;box-shadow:0 0 0 4px #25a56a18}
+.notification-button{width:38px;height:38px;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-surface);color:var(--text-main);font-size:18px;position:relative}
+.notification-button i{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;border-radius:20px;background:#d62839;color:#fff;font-style:normal;font-size:10px;display:grid;place-items:center}
+.topbar-avatar{display:flex;align-items:center;gap:8px;border:0;background:transparent;color:var(--text-main);font-size:12px;font-weight:700}
 .content-area{width:100%;max-width:1600px;margin:0 auto;padding:30px 34px 38px;flex:1}
 .page-section{display:flex;flex-direction:column;gap:22px}
 .animate-in{animation:fadeUp .32s ease both}@keyframes fadeUp{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
 .section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px}
-.section-heading h2{font-family:Manrope,sans-serif;font-size:26px;line-height:1.2;letter-spacing:-.9px;margin:5px 0 6px;color:var(--text-main)}
-.section-heading p{margin:0;color:var(--text-muted);font-size:12px}
-.eyebrow{font-size:9px;color:#d62839;font-weight:800;letter-spacing:1.45px}
-.date-chip,.count-chip{border:1px solid var(--border-color);background:var(--bg-surface);border-radius:9px;padding:9px 12px;font-size:10px;color:var(--text-muted);font-weight:700;white-space:nowrap}
+.section-heading h2{font-family:Manrope,sans-serif;font-size:27px;line-height:1.2;letter-spacing:-.9px;margin:5px 0 6px;color:var(--text-main)}
+.section-heading p{margin:0;color:var(--text-muted);font-size:13px}
+.eyebrow{font-size:10px;color:#d62839;font-weight:800;letter-spacing:1.45px}
+.date-chip,.count-chip{border:1px solid var(--border-color);background:var(--bg-surface);border-radius:9px;padding:9px 12px;font-size:11px;color:var(--text-muted);font-weight:700;white-space:nowrap}
 .welcome-banner{min-height:190px;border-radius:18px;background:linear-gradient(110deg,#24242a 0%,#33343b 65%,#48272c 100%);padding:30px 34px;color:#fff;display:flex;align-items:center;justify-content:space-between;overflow:hidden;position:relative}
 .welcome-banner:after{content:'';position:absolute;width:320px;height:320px;border:1px solid #ffffff0c;border-radius:50%;right:65px;top:-160px;box-shadow:0 0 0 34px #ffffff05,0 0 0 68px #ffffff03}
 .welcome-banner .eyebrow{color:#ff9da5}
-.welcome-banner h1{font-family:Manrope,sans-serif;font-size:32px;letter-spacing:-1.2px;margin:9px 0 7px;color:#fff}
-.welcome-banner p{font-size:12px;color:#c1c2c9;margin:0}
+.welcome-banner h1{font-family:Manrope,sans-serif;font-size:33px;letter-spacing:-1.2px;margin:9px 0 7px;color:#fff}
+.welcome-banner p{font-size:13px;color:#c1c2c9;margin:0}
 .welcome-mark{font-family:Manrope,sans-serif;font-size:86px;font-weight:900;color:#ffffff14;letter-spacing:-8px;margin-right:45px;z-index:1}
 .welcome-mark span{color:#ef5865;font-size:27px;letter-spacing:-1px}
 .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.stat-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:14px;padding:18px;display:flex;gap:13px;align-items:flex-start;box-shadow:var(--card-shadow);transition:background .2s,border .2s}
-.stat-icon{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:18px;font-weight:800}
+.stat-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:14px;padding:18px;display:flex;gap:13px;align-items:flex-start;box-shadow:var(--card-shadow)}
+.stat-icon{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-size:18px;font-weight:800}
 .stat-icon.red{background:#fff0f1;color:#d62839}.stat-icon.green{background:#eaf8f1;color:#239966}.stat-icon.amber{background:#fff6e8;color:#b97b1e}.stat-icon.blue{background:#edf4ff;color:#4775bd}
 .stat-copy{display:flex;flex-direction:column;gap:4px}
-.stat-copy span{font-size:10px;color:var(--text-muted);font-weight:650}
-.stat-copy strong{font-family:Manrope,sans-serif;font-size:25px;line-height:1.1;color:var(--text-main)}
-.stat-copy small{font-size:9px;color:var(--text-muted)}
+.stat-copy span{font-size:11px;color:var(--text-muted);font-weight:650}
+.stat-copy strong{font-family:Manrope,sans-serif;font-size:26px;line-height:1.1;color:var(--text-main)}
+.stat-copy small{font-size:10px;color:var(--text-muted)}
 .dashboard-columns{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}
-.panel{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:14px;box-shadow:var(--card-shadow);min-width:0;transition:background .2s,border .2s}
+.panel{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:14px;box-shadow:var(--card-shadow);min-width:0}
 .panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:19px 20px;border-bottom:1px solid var(--border-color)}
-.panel-heading h3{margin:0 0 4px;font-family:Manrope,sans-serif;font-size:14px;color:var(--text-main)}
-.panel-heading p{margin:0;font-size:10px;color:var(--text-muted)}
+.panel-heading h3{margin:0 0 4px;font-family:Manrope,sans-serif;font-size:15px;color:var(--text-main)}
+.panel-heading p{margin:0;font-size:11px;color:var(--text-muted)}
 .feed-item{display:flex;align-items:flex-start;gap:12px;padding:15px 20px;border-bottom:1px solid var(--border-color)}
 .feed-item:last-child{border-bottom:0}
-.feed-icon{width:29px;height:29px;border-radius:9px;background:#fff0f1;color:#d62839;display:grid;place-items:center;flex:0 0 auto}
+.feed-icon{width:30px;height:30px;border-radius:9px;background:#fff0f1;color:#d62839;display:grid;place-items:center;flex:0 0 auto}
 .feed-icon.urgent{background:#fff0eb;color:#d24a2e}
 .feed-content{min-width:0;flex:1}
-.feed-content strong{font-size:11px;color:var(--text-main)}
-.feed-content p{font-size:10px;color:var(--text-muted);line-height:1.55;margin:4px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.feed-content small{font-size:9px;color:var(--text-muted)}
-.priority-dot{width:7px;height:7px;border-radius:50%;background:#e0a43d;margin-top:5px}
+.feed-content strong{font-size:12px;color:var(--text-main)}
+.feed-content p{font-size:11px;color:var(--text-muted);line-height:1.55;margin:4px 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.feed-content small{font-size:10px;color:var(--text-muted)}
+.priority-dot{width:8px;height:8px;border-radius:50%;background:#e0a43d;margin-top:5px}
 .priority-dot.urgent{background:#d62839}
 .event-mini{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border-color)}
 .event-mini:last-child{border-bottom:0}
-.event-date{width:42px;height:45px;background:#fff0f1;border-radius:9px;color:#d62839;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.event-date strong{font-family:Manrope,sans-serif;font-size:18px;line-height:1}
-.event-date small{font-size:8px;font-weight:800;text-transform:uppercase}
-.event-mini>div:last-child strong{font-size:11px;color:var(--text-main)}
-.event-mini p{font-size:9px;color:var(--text-muted);margin:4px 0 0}
+.event-date{width:44px;height:47px;background:#fff0f1;border-radius:9px;color:#d62839;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.event-date strong{font-family:Manrope,sans-serif;font-size:19px;line-height:1}
+.event-date small{font-size:9px;font-weight:800;text-transform:uppercase}
+.event-mini>div:last-child strong{font-size:12px;color:var(--text-main)}
+.event-mini p{font-size:10px;color:var(--text-muted);margin:4px 0 0}
 .quick-links{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
-.quick-links button{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:16px;display:grid;grid-template-columns:32px 1fr;grid-template-rows:auto auto;column-gap:11px;text-align:left;transition:transform .18s,border .18s,background .2s}
+.quick-links button{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:16px;display:grid;grid-template-columns:34px 1fr;grid-template-rows:auto auto;column-gap:11px;text-align:left;transition:transform .18s,border .18s}
 .quick-links button:hover{transform:translateY(-2px);border-color:#e7a0a7}
-.quick-links button>span{grid-row:1/3;width:32px;height:32px;background:#fff0f1;color:#d62839;border-radius:9px;display:grid;place-items:center;font-size:17px}
-.quick-links strong{font-size:11px;color:var(--text-main)}
-.quick-links small{font-size:9px;color:var(--text-muted);margin-top:3px}
-.button{border:1px solid transparent;border-radius:9px;padding:10px 15px;font-size:11px;font-weight:750;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:transform .16s,background .16s,border .16s;white-space:nowrap}
+.quick-links button>span{grid-row:1/3;width:34px;height:34px;background:#fff0f1;color:#d62839;border-radius:9px;display:grid;place-items:center;font-size:18px}
+.quick-links strong{font-size:12px;color:var(--text-main)}
+.quick-links small{font-size:10px;color:var(--text-muted);margin-top:3px}
+.button{border:1px solid transparent;border-radius:9px;padding:10px 15px;font-size:12px;font-weight:750;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:transform .16s,background .16s;white-space:nowrap}
 .button:disabled{opacity:.45;cursor:not-allowed}
 .button:hover:not(:disabled){transform:translateY(-1px)}
 .button-primary{background:#d62839;color:#fff;border-color:#d62839;box-shadow:0 4px 10px #d628391c}
@@ -1149,13 +1173,13 @@ body.dark-theme {
 .button-outline:hover:not(:disabled){border-color:#d62839;color:#d62839}
 .button-quiet{background:var(--border-color);color:var(--text-main);border-color:var(--border-color)}
 .button-danger-soft{background:#fff0f1;color:#c62535;border-color:#f3cbd0}
-.button-small{padding:7px 10px;font-size:9px}
+.button-small{padding:7px 10px;font-size:10px}
 .button-full{width:100%;padding:13px}
-.text-button{border:0;background:transparent;color:#d62839;font-size:10px;font-weight:800;padding:5px}
+.text-button{border:0;background:transparent;color:#d62839;font-size:11px;font-weight:800;padding:5px}
 .danger-text{color:#c92535}
 .mobile-menu-button,.mobile-close{display:none}
 .filter-tabs,.admin-tabs{display:flex;gap:7px;overflow:auto;padding-bottom:4px}
-.filter-tabs button,.admin-tabs button{border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-muted);padding:9px 12px;border-radius:9px;font-size:10px;font-weight:750;white-space:nowrap}
+.filter-tabs button,.admin-tabs button{border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-muted);padding:9px 12px;border-radius:9px;font-size:11px;font-weight:750;white-space:nowrap}
 .filter-tabs button span{margin-left:8px;color:var(--text-muted)}
 .filter-tabs button.selected{background:#d62839;border-color:#d62839;color:#fff}
 .filter-tabs button.selected span{color:#ffd9dd}
@@ -1164,54 +1188,54 @@ body.dark-theme {
 .search-box{display:flex;align-items:center;gap:9px;min-width:0;flex:1;background:var(--bg-main);border:1px solid var(--border-color);border-radius:9px;padding:0 12px;color:var(--text-muted)}
 .search-box:focus-within{border-color:#e18b94;box-shadow:0 0 0 3px #d6283910}
 .search-box span{font-size:19px}
-.search-box input{width:100%;min-width:0;border:0;outline:0;background:transparent;padding:11px 0;font-size:10px;color:var(--text-main)}
+.search-box input{width:100%;min-width:0;border:0;outline:0;background:transparent;padding:11px 0;font-size:12px;color:var(--text-main)}
 .search-box input::placeholder{color:var(--text-muted)}
-.toolbar-note{font-size:9px;color:var(--text-muted)}
+.toolbar-note{font-size:10px;color:var(--text-muted)}
 .table-scroll{overflow-x:auto}
 .data-table{width:100%;border-collapse:collapse;text-align:left;min-width:820px}
-.data-table th{background:var(--table-head);color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.7px;padding:13px 15px;font-weight:800;white-space:nowrap}
-.data-table td{padding:12px 15px;border-top:1px solid var(--border-color);color:var(--text-main);font-size:10px;white-space:nowrap}
+.data-table th{background:var(--table-head);color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px;padding:13px 15px;font-weight:800;white-space:nowrap}
+.data-table td{padding:13px 15px;border-top:1px solid var(--border-color);color:var(--text-main);font-size:11px;white-space:nowrap}
 .data-table tbody tr:hover{background:rgba(214,40,57,0.03)}
 .member-cell{display:flex;align-items:center;gap:10px;border:0;background:transparent;text-align:left;padding:0;color:inherit;min-width:155px}
 .member-cell>span{display:flex;flex-direction:column;gap:3px}
-.member-cell strong{font-size:10px;color:var(--text-main);font-weight:800}
-.member-cell small{font-size:9px;color:var(--text-muted)}
+.member-cell strong{font-size:11px;color:var(--text-main);font-weight:800}
+.member-cell small{font-size:10px;color:var(--text-muted)}
 .member-cell em{font-style:normal;color:#d99a24}
 .avatar{object-fit:cover;flex:0 0 auto;border-radius:11px;background:var(--border-color);border:1px solid var(--border-color)}
-.avatar-xs{width:24px;height:24px;border-radius:8px}.avatar-sm{width:32px;height:32px;border-radius:9px}.avatar-md{width:36px;height:36px}.avatar-xl{width:78px;height:78px;border-radius:20px}
-.id-value{color:#d62839;font-size:10px}.missing-value{color:var(--text-muted);font-weight:500}
-.status-pill{display:inline-flex;align-items:center;padding:5px 8px;border-radius:20px;font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.45px;white-space:nowrap}
+.avatar-xs{width:26px;height:26px;border-radius:8px}.avatar-sm{width:34px;height:34px;border-radius:9px}.avatar-md{width:38px;height:38px}.avatar-xl{width:80px;height:80px;border-radius:20px}
+.id-value{color:#d62839;font-size:11px}.missing-value{color:var(--text-muted);font-weight:500}
+.status-pill{display:inline-flex;align-items:center;padding:5px 9px;border-radius:20px;font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.45px;white-space:nowrap}
 .status-pill.green{background:#e9f7ef;color:#238455}.status-pill.red{background:#fff0f1;color:#c32b3b}.status-pill.amber{background:#fff5e5;color:#a87520}.status-pill.gray{background:var(--border-color);color:var(--text-muted)}
 .role-list{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
-.role-badge{display:inline-flex;padding:4px 7px;border-radius:6px;font-size:8px;font-weight:800;border:1px solid transparent;white-space:nowrap}
+.role-badge{display:inline-flex;padding:4px 8px;border-radius:6px;font-size:9px;font-weight:800;border:1px solid transparent;white-space:nowrap}
 .role-badge.red,.role-symbol.red{background:#fff0f1;color:#c72b3a;border-color:#f5cbd0}.role-badge.amber,.role-symbol.amber{background:#fff6e8;color:#a97724;border-color:#f2dfbd}.role-badge.blue,.role-symbol.blue{background:#edf4ff;color:#4771b4;border-color:#d6e4fb}.role-badge.green,.role-symbol.green{background:#eaf7ef;color:#278454;border-color:#d0ebdc}.role-badge.purple,.role-symbol.purple{background:#f3efff;color:#7554b6;border-color:#e0d7fa}.role-badge.cyan,.role-symbol.cyan{background:#e9f8fa;color:#278696;border-color:#d0edf1}.role-badge.pink,.role-symbol.pink{background:#fff0f7;color:#b54e83;border-color:#f5d7e6}.role-badge.slate,.role-symbol.slate{background:var(--border-color);color:var(--text-main);border-color:var(--border-color)}.role-badge.orange,.role-symbol.orange{background:#fff2e9;color:#bb6b32;border-color:#f5ddca}.role-badge.teal,.role-symbol.teal{color:#348b7d;background:#e9f7f4;border-color:#cfece5}.role-badge.indigo,.role-symbol.indigo{background:#eef0ff;color:#5968ae;border-color:#d9ddfc}
-.more-roles{font-size:8px;color:var(--text-muted)}
-.icon-button{width:29px;height:29px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);color:var(--text-main);font-size:15px;display:inline-grid;place-items:center}
+.more-roles{font-size:9px;color:var(--text-muted)}
+.icon-button{width:30px;height:30px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);color:var(--text-main);font-size:15px;display:inline-grid;place-items:center}
 .icon-button:hover{border-color:#d62839;color:#d62839}
 .icon-button.danger{color:#c72b3b;background:#fff3f4}
 .row-actions{display:flex;align-items:center;gap:5px}
 .empty-state{padding:38px 18px;text-align:center;color:var(--text-muted)}
-.empty-icon{width:42px;height:42px;margin:0 auto 11px;border-radius:13px;background:var(--border-color);color:var(--text-muted);display:grid;place-items:center;font-size:21px}
-.empty-state strong{display:block;color:var(--text-main);font-size:12px}
-.empty-state p{margin:6px auto 0;max-width:310px;font-size:10px;line-height:1.6}
+.empty-icon{width:44px;height:44px;margin:0 auto 11px;border-radius:13px;background:var(--border-color);color:var(--text-muted);display:grid;place-items:center;font-size:22px}
+.empty-state strong{display:block;color:var(--text-main);font-size:13px}
+.empty-state p{margin:6px auto 0;max-width:310px;font-size:11px;line-height:1.6}
 .resource-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
 .resource-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:13px;overflow:hidden}
 .resource-card>img{width:100%;height:180px;object-fit:cover;background:var(--border-color)}
 .resource-card-body{padding:15px;display:flex;justify-content:space-between;align-items:center;gap:10px}
-.resource-card h3,.radio-card h3{font-size:12px;margin:0 0 7px;color:var(--text-main)}
-.resource-number{font-size:9px;color:#d12b3b;font-weight:800}
+.resource-card h3,.radio-card h3{font-size:13px;margin:0 0 7px;color:var(--text-main)}
+.resource-number{font-size:10px;color:#d12b3b;font-weight:800}
 .radio-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .radio-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:13px;padding:18px;display:flex;gap:13px;align-items:flex-start}
-.radio-symbol{width:39px;height:39px;background:#fff0f1;color:#d62839;border-radius:11px;display:grid;place-items:center;font-size:21px}
+.radio-symbol{width:40px;height:40px;background:#fff0f1;color:#d62839;border-radius:11px;display:grid;place-items:center;font-size:21px}
 .radio-copy{flex:1;min-width:0}
-.radio-copy strong{color:#d12b3b;font-size:13px}
-.radio-copy p{font-size:10px;color:var(--text-muted);line-height:1.6;margin:7px 0 0}
+.radio-copy strong{color:#d12b3b;font-size:14px}
+.radio-copy p{font-size:11px;color:var(--text-muted);line-height:1.6;margin:7px 0 0}
 .form-panel{padding:0 20px 20px}
 .form-panel>.button{margin-top:16px}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:17px}
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
-.field>span{font-size:10px;font-weight:750;color:var(--text-main)}
-.field input,.field textarea,.field select,.admin-filters select{width:100%;padding:10px 11px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);color:var(--text-main);outline:0;font-size:10px;min-width:0}
+.field>span{font-size:11px;font-weight:750;color:var(--text-main)}
+.field input,.field textarea,.field select,.admin-filters select{width:100%;padding:11px 12px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);color:var(--text-main);outline:0;font-size:11px;min-width:0}
 .field input:focus,.field textarea:focus,.field select:focus,.admin-filters select:focus{border-color:#df8790;box-shadow:0 0 0 3px #d6283910}
 .field textarea{resize:vertical;line-height:1.55}
 .field input[type=file]{padding:8px}
@@ -1220,62 +1244,62 @@ body.dark-theme {
 .notice-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:13px;padding:18px 20px}
 .notice-card.notice-urgent{border-left:3px solid #d62839}
 .notice-top,.notice-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.notice-top small,.notice-footer{font-size:9px;color:var(--text-muted)}
-.notice-tag{display:inline-flex;background:var(--border-color);color:var(--text-main);border-radius:20px;padding:5px 8px;font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.5px}
+.notice-top small,.notice-footer{font-size:10px;color:var(--text-muted)}
+.notice-tag{display:inline-flex;background:var(--border-color);color:var(--text-main);border-radius:20px;padding:5px 9px;font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.5px}
 .notice-tag.urgent{background:#fff0f1;color:#c72b3b}.notice-tag.important{background:#fff6e8;color:#a97724}
-.notice-card h3{font-size:13px;margin:12px 0 7px;color:var(--text-main)}
-.notice-card p{font-size:10px;color:var(--text-muted);line-height:1.7;margin:0 0 12px;white-space:pre-wrap}
+.notice-card h3{font-size:14px;margin:12px 0 7px;color:var(--text-main)}
+.notice-card p{font-size:11px;color:var(--text-muted);line-height:1.7;margin:0 0 12px;white-space:pre-wrap}
 .notice-footer{border-top:1px solid var(--border-color);padding-top:10px}
 .notice-footer strong{color:var(--text-main)}
 .rules-list{display:flex;flex-direction:column;gap:9px}
 .rule-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:17px;display:flex;align-items:flex-start;gap:15px}
-.rule-index{font-family:Manrope,sans-serif;color:#d62839;font-size:18px;font-weight:850}
+.rule-index{font-family:Manrope,sans-serif;color:#d62839;font-size:19px;font-weight:850}
 .rule-card>div{flex:1}
-.rule-card h3{font-size:12px;margin:2px 0 6px;color:var(--text-main)}
-.rule-card p{font-size:10px;line-height:1.65;color:var(--text-muted);margin:0}
+.rule-card h3{font-size:13px;margin:2px 0 6px;color:var(--text-main)}
+.rule-card p{font-size:11px;line-height:1.65;color:var(--text-muted);margin:0}
 .role-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .role-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:15px;display:flex;align-items:center;gap:12px}
-.role-symbol{width:37px;height:37px;border-radius:10px;display:grid;place-items:center;font-size:19px;border:1px solid transparent}
+.role-symbol{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:19px;border:1px solid transparent}
 .role-card-main{flex:1;min-width:0}
-.role-card h3{font-size:11px;margin:0 0 4px;color:var(--text-main)}
-.role-card p{font-size:9px;line-height:1.4;margin:0 0 4px;color:var(--text-muted)}
-.role-card small{font-size:9px;color:var(--text-muted)}
+.role-card h3{font-size:12px;margin:0 0 4px;color:var(--text-main)}
+.role-card p{font-size:10px;line-height:1.4;margin:0 0 4px;color:var(--text-muted)}
+.role-card small{font-size:10px;color:var(--text-muted)}
 .discord-panel{max-width:650px;margin:30px auto;background:var(--bg-surface);border:1px solid var(--border-color);border-radius:20px;padding:55px 35px;text-align:center;box-shadow:var(--card-shadow)}
 .discord-emblem{width:72px;height:72px;border-radius:22px;background:#fff0f1;color:#d62839;display:grid;place-items:center;font-size:36px;margin:0 auto 20px}
-.discord-panel h2{font:800 27px Manrope,sans-serif;margin:9px 0;color:var(--text-main)}
-.discord-panel p{font-size:12px;color:var(--text-muted);line-height:1.7;max-width:450px;margin:0 auto 22px}
-.discord-panel small{display:block;font-size:9px;color:var(--text-muted);margin-top:16px}
+.discord-panel h2{font:800 28px Manrope,sans-serif;margin:9px 0;color:var(--text-main)}
+.discord-panel p{font-size:13px;color:var(--text-muted);line-height:1.7;max-width:450px;margin:0 auto 22px}
+.discord-panel small{display:block;font-size:10px;color:var(--text-muted);margin-top:16px}
 .event-list{display:flex;flex-direction:column;gap:10px}
 .event-card{display:flex;align-items:center;gap:18px;background:var(--bg-surface);border:1px solid var(--border-color);border-radius:13px;padding:15px}
-.event-date-large{width:66px;min-width:66px;height:70px;background:#fff0f1;border-radius:12px;color:#c72b3b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
-.event-date-large strong{font:850 26px Manrope,sans-serif}
-.event-date-large span{font-size:8px;font-weight:800;text-transform:uppercase}
+.event-date-large{width:68px;min-width:68px;height:72px;background:#fff0f1;border-radius:12px;color:#c72b3b;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.event-date-large strong{font:850 27px Manrope,sans-serif}
+.event-date-large span{font-size:9px;font-weight:800;text-transform:uppercase}
 .event-details{flex:1;min-width:0}
-.event-details h3{font-size:13px;margin:7px 0 4px;color:var(--text-main)}
-.event-details p{font-size:10px;color:var(--text-muted);margin:0 0 6px}
-.event-details small{font-size:9px;color:var(--text-muted)}
+.event-details h3{font-size:14px;margin:7px 0 4px;color:var(--text-main)}
+.event-details p{font-size:11px;color:var(--text-muted);margin:0 0 6px}
+.event-details small{font-size:10px;color:var(--text-muted)}
 .notification-list{display:flex;flex-direction:column;gap:9px}
 .notification-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:12px;padding:15px;display:flex;align-items:center;gap:13px}
 .notification-card.unread{border-left:3px solid #d62839}
 .notification-card.read{opacity:.76}
-.notification-symbol{width:36px;height:36px;display:grid;place-items:center;background:#fff0f1;color:#d62839;border-radius:10px;font-size:18px}
+.notification-symbol{width:38px;height:38px;display:grid;place-items:center;background:#fff0f1;color:#d62839;border-radius:10px;font-size:18px}
 .notification-content{flex:1;min-width:0}
-.notification-content h3{font-size:11px;color:var(--text-main);margin:0 0 4px}
-.notification-content p{font-size:10px;color:var(--text-muted);margin:0 0 5px}
-.notification-content small{font-size:9px;color:var(--text-muted)}
-.profile-layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:15px;align-items:start}
+.notification-content h3{font-size:12px;color:var(--text-main);margin:0 0 4px}
+.notification-content p{font-size:11px;color:var(--text-muted);margin:0 0 5px}
+.notification-content small{font-size:10px;color:var(--text-muted)}
+.profile-layout{display:grid;grid-template-columns:310px minmax(0,1fr);gap:15px;align-items:start}
 .profile-card{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:14px;padding:25px;text-align:center}
 .profile-card .avatar{margin:0 auto 13px}
-.profile-card h2{font:800 17px Manrope,sans-serif;margin:0 0 4px;color:var(--text-main)}
-.profile-card>p{font-size:10px;color:var(--text-muted);margin:0 0 11px}
+.profile-card h2{font:800 18px Manrope,sans-serif;margin:0 0 4px;color:var(--text-main)}
+.profile-card>p{font-size:11px;color:var(--text-muted);margin:0 0 11px}
 .profile-meta{display:flex;flex-direction:column;gap:10px;text-align:left;border-top:1px solid var(--border-color);margin-top:18px;padding-top:16px}
 .profile-meta span{display:flex;justify-content:space-between;gap:10px}
-.profile-meta small{color:var(--text-muted);font-size:9px}
-.profile-meta strong{color:var(--text-main);font-size:9px;text-align:right;overflow-wrap:anywhere}
+.profile-meta small{color:var(--text-muted);font-size:10px}
+.profile-meta strong{color:var(--text-main);font-size:10px;text-align:right;overflow-wrap:anywhere}
 .profile-roles{justify-content:center;margin-top:15px}
 .profile-form{padding-bottom:20px}
 .profile-form .field{margin-top:14px}
-.admin-badge{background:#fff0f1;color:#c72b3b;border:1px solid #f3cbd0;border-radius:20px;padding:7px 10px;font-size:8px;font-weight:850;letter-spacing:.8px}
+.admin-badge{background:#fff0f1;color:#c72b3b;border:1px solid #f3cbd0;border-radius:20px;padding:7px 10px;font-size:9px;font-weight:850;letter-spacing:.8px}
 .admin-tabs{border-bottom:1px solid var(--border-color);padding-bottom:10px}
 .admin-tabs button{background:transparent;border-color:transparent;color:var(--text-muted)}
 .admin-tabs button.active{background:#fff0f1;border-color:#f1c9ce;color:#c72b3b}
@@ -1289,75 +1313,75 @@ body.dark-theme {
 .application-admin-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:15px;border-bottom:1px solid var(--border-color)}
 .candidate-data-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:15px 0}
 .candidate-data-grid>span{background:var(--bg-main);border:1px solid var(--border-color);border-radius:9px;padding:10px;display:flex;flex-direction:column;gap:5px;min-width:0}
-.candidate-data-grid small,.member-detail-grid small{font-size:8px;color:var(--text-muted);font-weight:750;text-transform:uppercase;letter-spacing:.45px}
-.candidate-data-grid strong{font-size:10px;color:var(--text-main);overflow-wrap:anywhere}
+.candidate-data-grid small,.member-detail-grid small{font-size:9px;color:var(--text-muted);font-weight:750;text-transform:uppercase;letter-spacing:.45px}
+.candidate-data-grid strong{font-size:11px;color:var(--text-main);overflow-wrap:anywhere}
 .candidate-data-grid .highlight-id{background:#fff0f1;border-color:#f3cbd0}
 .candidate-data-grid .highlight-id strong{color:#c72b3b;font:850 14px Manrope,sans-serif}
 .candidate-reason{background:var(--bg-main);border:1px solid var(--border-color);border-radius:9px;padding:12px}
-.candidate-reason small{font-size:8px;color:var(--text-muted);text-transform:uppercase;font-weight:800}
-.candidate-reason p{font-size:10px;color:var(--text-main);line-height:1.6;margin:6px 0 0;white-space:pre-wrap}
+.candidate-reason small{font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:800}
+.candidate-reason p{font-size:11px;color:var(--text-main);line-height:1.6;margin:6px 0 0;white-space:pre-wrap}
 .candidate-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:13px}
 .admin-two-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
 .punished-list,.internal-notes-list,.logs-list{padding:15px;display:flex;flex-direction:column;gap:9px;max-height:650px;overflow:auto}
 .punished-card,.note-member{border:1px solid var(--border-color);border-radius:10px;padding:12px}
 .punished-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .punished-head>div{display:flex;flex-direction:column;gap:4px}
-.punished-head strong,.note-member>strong{font-size:10px;color:var(--text-main)}
-.punished-head small,.note-member>strong small{font-size:8px;color:var(--text-muted);font-weight:500}
+.punished-head strong,.note-member>strong{font-size:11px;color:var(--text-main)}
+.punished-head small,.note-member>strong small{font-size:9px;color:var(--text-muted);font-weight:500}
 .punishment-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--border-color);padding:9px 0 0;margin-top:9px}
 .punishment-row span{display:flex;flex-direction:column;gap:3px;min-width:0}
-.punishment-row strong{font-size:9px;color:#c72b3b}
-.punishment-row small{font-size:9px;color:var(--text-muted);white-space:normal}
+.punishment-row strong{font-size:10px;color:#c72b3b}
+.punishment-row small{font-size:10px;color:var(--text-muted);white-space:normal}
 .note-item{background:var(--bg-main);border:1px solid var(--border-color);border-radius:8px;padding:10px;margin-top:8px}
-.note-item p{font-size:10px;color:var(--text-main);line-height:1.55;margin:0 0 7px}
-.note-item small{font-size:8px;color:var(--text-muted)}
+.note-item p{font-size:11px;color:var(--text-main);line-height:1.55;margin:0 0 7px}
+.note-item small{font-size:9px;color:var(--text-muted)}
 .roles-admin-layout{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start}
 .role-admin-list{padding:8px 17px 14px}
 .role-admin-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-color)}
 .role-admin-row:last-child{border-bottom:0}
 .role-admin-row>div:first-child{display:flex;flex-direction:column;gap:6px}
-.role-admin-row small{font-size:9px;color:var(--text-muted)}
-.tiny-tag{font-size:8px;color:#9a762d;background:#fff6e8;border-radius:10px;padding:4px 6px}
+.role-admin-row small{font-size:10px;color:var(--text-muted)}
+.tiny-tag{font-size:9px;color:#9a762d;background:#fff6e8;border-radius:10px;padding:4px 6px}
 .role-help{padding:24px}
 .role-assignment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
-.role-assignment-option{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:7px 8px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);color:var(--text-main);font-size:9px}
+.role-assignment-option{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:8px 9px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);color:var(--text-main);font-size:10px}
 .role-assignment-option.assigned{border-color:#efb9bf;background:#fff8f8}
 .role-assignment-option:disabled{opacity:.45;cursor:not-allowed}
 .role-assignment-option>strong{font-size:13px;color:#c72b3b}
 .help-symbol{width:40px;height:40px;background:#fff0f1;color:#d62839;border-radius:11px;display:grid;place-items:center;font-size:22px}
-.role-help h3{font-size:13px;margin:13px 0 7px}
-.role-help p,.help-note{font-size:10px;line-height:1.65;color:var(--text-muted)}
+.role-help h3{font-size:14px;margin:13px 0 7px}
+.role-help p,.help-note{font-size:11px;line-height:1.65;color:var(--text-muted)}
 .help-note{margin-top:13px;background:#fff6e8;border:1px solid #f1e6cb;border-radius:9px;padding:11px;color:#896d35}
 .permission-group{border:1px solid var(--border-color);border-radius:9px;padding:12px;margin:10px 0}
-.permission-group>strong{font-size:10px;color:var(--text-main)}
-.permission-option{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid var(--border-color);margin-top:6px;font-size:10px;color:var(--text-main)}
+.permission-group>strong{font-size:11px;color:var(--text-main)}
+.permission-option{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid var(--border-color);margin-top:6px;font-size:11px;color:var(--text-main)}
 .permission-option input{accent-color:#d62839}
-.permission-option small{margin-left:auto;color:var(--text-muted);font-size:8px}
+.permission-option small{margin-left:auto;color:var(--text-muted);font-size:9px}
 .log-row{display:flex;align-items:flex-start;gap:11px;border-bottom:1px solid var(--border-color);padding:11px 0}
 .log-row:last-child{border-bottom:0}
-.log-dot{width:7px;height:7px;background:#d62839;border-radius:50%;margin-top:5px}
+.log-dot{width:8px;height:8px;background:#d62839;border-radius:50%;margin-top:5px}
 .log-row>div{flex:1;min-width:0}
-.log-row strong{font-size:10px;color:var(--text-main)}
-.log-row p{font-size:10px;color:var(--text-muted);margin:4px 0}
-.log-row small,.log-row time{font-size:8px;color:var(--text-muted)}
+.log-row strong{font-size:11px;color:var(--text-main)}
+.log-row p{font-size:11px;color:var(--text-muted);margin:4px 0}
+.log-row small,.log-row time{font-size:9px;color:var(--text-muted)}
 .log-row time{white-space:nowrap}
-.app-footer{border-top:1px solid var(--border-color);background:var(--bg-surface);padding:14px 34px;display:flex;justify-content:space-between;color:var(--text-muted);font-size:8px;font-weight:800;letter-spacing:.8px;transition:background .2s,border .2s}
+.app-footer{border-top:1px solid var(--border-color);background:var(--bg-surface);padding:14px 34px;display:flex;justify-content:space-between;color:var(--text-muted);font-size:9px;font-weight:800;letter-spacing:.8px;transition:background .2s,border .2s}
 .modal-backdrop{position:fixed;inset:0;background:#15161bc4;backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}
 .modal-card{width:min(620px,100%);max-height:92vh;overflow:auto;background:var(--bg-surface);border-radius:16px;border:1px solid var(--border-color);box-shadow:0 20px 70px #0003;padding:22px;animation:fadeUp .2s ease;color:var(--text-main)}
 .role-editor-modal{width:min(680px,100%)}.confirm-modal{width:min(420px,100%)}
 .modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:15px;border-bottom:1px solid var(--border-color);margin-bottom:18px}
-.modal-header h2{font:800 19px Manrope,sans-serif;margin:5px 0 0;color:var(--text-main)}
+.modal-header h2{font:800 20px Manrope,sans-serif;margin:5px 0 0;color:var(--text-main)}
 .member-profile-head{display:flex;align-items:center;gap:15px;margin-bottom:18px}
-.member-profile-head h2{font:800 17px Manrope,sans-serif;margin:0 0 5px}
-.member-profile-head p{font-size:10px;color:var(--text-muted);margin:0 0 8px}
+.member-profile-head h2{font:800 18px Manrope,sans-serif;margin:0 0 5px}
+.member-profile-head p{font-size:11px;color:var(--text-muted);margin:0 0 8px}
 .member-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .member-detail-grid>span{display:flex;flex-direction:column;gap:6px;padding:11px;background:var(--bg-main);border:1px solid var(--border-color);border-radius:9px;min-width:0}
-.member-detail-grid strong{font-size:10px;color:var(--text-main);overflow-wrap:anywhere}
+.member-detail-grid strong{font-size:11px;color:var(--text-main);overflow-wrap:anywhere}
 .member-detail-block{border-top:1px solid var(--border-color);padding-top:14px;margin-top:14px}
-.member-detail-block>small{display:block;font-size:8px;color:var(--text-muted);text-transform:uppercase;font-weight:850;letter-spacing:.7px;margin-bottom:8px}
-.member-detail-block>p{font-size:10px;color:var(--text-muted);line-height:1.6;margin:0}
+.member-detail-block>small{display:block;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:850;letter-spacing:.7px;margin-bottom:8px}
+.member-detail-block>p{font-size:11px;color:var(--text-muted);line-height:1.6;margin:0}
 .modal-history-line{padding:8px 0;border-bottom:1px solid var(--border-color)!important}
-.modal-history-line small{display:block;font-size:8px;color:var(--text-muted);margin-top:4px}
+.modal-history-line small{display:block;font-size:9px;color:var(--text-muted);margin-top:4px}
 .modal-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:20px}
 .modal-actions.vertical{flex-direction:column}
 .modal-actions.vertical .button{width:100%}
@@ -1367,30 +1391,30 @@ body.dark-theme {
 .auth-card,.application-card{width:min(440px,100%);background:var(--bg-surface);border:1px solid var(--border-color);border-radius:19px;box-shadow:var(--card-shadow);padding:33px;color:var(--text-main);transition:background .2s,border .2s}
 .auth-card{text-align:center}
 .auth-brand-mark{width:58px;height:58px;display:grid;place-items:center;margin:0 auto 17px;border-radius:17px;background:#d62839;color:#fff;font:900 28px Manrope,sans-serif;box-shadow:0 8px 22px #d6283930}
-.auth-eyebrow{color:#d62839;font-size:9px;font-weight:850;letter-spacing:1.6px}
-.auth-card h1{font:900 25px Manrope,sans-serif;letter-spacing:-.8px;margin:7px 0;color:var(--text-main)}
+.auth-eyebrow{color:#d62839;font-size:10px;font-weight:850;letter-spacing:1.6px}
+.auth-card h1{font:900 26px Manrope,sans-serif;letter-spacing:-.8px;margin:7px 0;color:var(--text-main)}
 .auth-card h1 span{color:#d62839}
-.auth-subtitle{font-size:11px;color:var(--text-muted);margin:0 0 24px}
+.auth-subtitle{font-size:12px;color:var(--text-muted);margin:0 0 24px}
 .auth-switch{margin-top:17px}
-.auth-footnote{border-top:1px solid var(--border-color);margin-top:22px;padding-top:15px;font-size:9px;color:var(--text-muted)}
-.alert{font-size:10px;padding:10px;border-radius:8px;margin:0 0 14px;text-align:left}
+.auth-footnote{border-top:1px solid var(--border-color);margin-top:22px;padding-top:15px;font-size:10px;color:var(--text-muted)}
+.alert{font-size:11px;padding:10px;border-radius:8px;margin:0 0 14px;text-align:left}
 .alert-error{background:#fff0f1;color:#bd2938;border:1px solid #f1cbd0}
 .loading-screen{min-height:100vh;background:var(--bg-main);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text-main)}
 .loading-mark{width:48px;height:48px;background:#d62839;color:white;border-radius:14px;display:grid;place-items:center;font:900 23px Manrope,sans-serif;margin-bottom:6px}
-.loading-screen span{font-size:10px;color:var(--text-muted)}
+.loading-screen span{font-size:11px;color:var(--text-muted)}
 .application-card{width:min(660px,100%);padding:26px}
 .application-brand{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-color);padding-bottom:15px}
 .application-brand>div:nth-child(2){display:flex;flex-direction:column;gap:3px;flex:1}
-.application-brand strong{font-size:11px;color:var(--text-main)}
-.application-brand span{font-size:8px;color:var(--text-muted)}
+.application-brand strong{font-size:12px;color:var(--text-main)}
+.application-brand span{font-size:9px;color:var(--text-muted)}
 .application-state{text-align:center;padding:28px 8px}
 .state-symbol{width:52px;height:52px;margin:0 auto 12px;border-radius:15px;display:grid;place-items:center;font-size:25px;font-weight:850}
 .state-symbol.amber{background:#fff5e5;color:#b97c22}.state-symbol.red{background:#fff0f1;color:#c72b3b}
-.application-state h2,.application-form-wrap h2{font:800 21px Manrope,sans-serif;margin:12px 0 7px;color:var(--text-main)}
-.application-state>p,.application-form-wrap>p{font-size:11px;line-height:1.7;color:var(--text-muted);max-width:470px;margin:0 auto 17px}
+.application-state h2,.application-form-wrap h2{font:800 22px Manrope,sans-serif;margin:12px 0 7px;color:var(--text-main)}
+.application-state>p,.application-form-wrap>p{font-size:12px;line-height:1.7;color:var(--text-muted);max-width:470px;margin:0 auto 17px}
 .application-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:22px;text-align:left}
-.application-summary span{display:flex;flex-direction:column;gap:5px;padding:10px;background:var(--bg-main);border-radius:8px;font-size:8px;color:var(--text-muted)}
-.application-summary strong{font-size:10px;color:var(--text-main);overflow-wrap:anywhere}
+.application-summary span{display:flex;flex-direction:column;gap:5px;padding:10px;background:var(--bg-main);border-radius:8px;font-size:9px;color:var(--text-muted)}
+.application-summary strong{font-size:11px;color:var(--text-main);overflow-wrap:anywhere}
 .application-form-wrap{padding:23px 4px 4px}
 .application-form-wrap>p{margin:0 0 18px}
 .application-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -1398,6 +1422,6 @@ body.dark-theme {
 
 @media(max-width:1180px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.role-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.resource-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.content-area{padding:25px 24px}.topbar{padding:0 24px}}
 @media(max-width:900px){.sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-102%);transition:transform .23s ease;box-shadow:12px 0 40px #0002}.sidebar.sidebar-open{transform:translateX(0)}.mobile-backdrop{display:block;position:fixed;inset:0;background:#11182788;border:0;z-index:35}.mobile-close{display:block;margin-left:auto;border:0;background:transparent;color:#fff;font-size:23px}.mobile-menu-button{display:inline-grid;place-items:center;border:1px solid var(--border-color);background:var(--bg-surface);border-radius:8px;width:34px;height:34px;color:var(--text-main)}.dashboard-columns{grid-template-columns:1fr}.profile-layout{grid-template-columns:1fr 1.4fr}.admin-two-columns,.roles-admin-layout{grid-template-columns:1fr}}
-@media(max-width:640px){.topbar{height:68px;padding:0 14px}.topbar-actions{gap:8px}.connection-status,.topbar-avatar span,.logout-top{display:none}.content-area{padding:19px 13px 25px}.page-context{display:none}.breadcrumb{font-size:9px;gap:7px}.section-heading{align-items:flex-start;flex-direction:column}.section-heading h2{font-size:23px}.date-chip{white-space:normal}.welcome-banner{padding:23px 20px;min-height:165px}.welcome-banner h1{font-size:26px}.welcome-banner p{max-width:245px;font-size:10px;line-height:1.6}.welcome-mark{font-size:58px;margin-right:0}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat-card{padding:13px;gap:9px}.stat-icon{width:32px;height:32px;font-size:15px}.stat-copy strong{font-size:21px}.stat-copy span{font-size:9px}.stat-copy small{font-size:8px}.quick-links{grid-template-columns:1fr}.quick-links button{padding:13px}.filter-tabs{margin-right:-13px;padding-right:13px}.filter-tabs button{padding:8px 10px;font-size:9px}.table-toolbar{align-items:stretch;flex-direction:column}.toolbar-note{display:none}.resource-grid,.radio-grid,.role-grid{grid-template-columns:1fr}.resource-card>img{height:190px}.form-grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.admin-filters{flex-direction:column}.admin-filters select{width:100%}.candidate-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.candidate-actions{flex-wrap:wrap}.candidate-actions .button{flex:1}.profile-layout{grid-template-columns:1fr}.application-form{grid-template-columns:1fr}.application-summary{grid-template-columns:1fr}.event-card{align-items:flex-start;gap:11px;padding:11px}.event-date-large{width:55px;min-width:55px;height:61px}.event-date-large strong{font-size:22px}.notification-card{align-items:flex-start;flex-wrap:wrap}.notification-card .button{margin-left:49px}.app-footer{padding:12px 14px;gap:8px;font-size:7px}.auth-card,.application-card{padding:24px 19px}.member-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.modal-card{padding:17px}.member-profile-head .avatar{width:60px;height:60px}.modal-actions{join:stretch}.modal-actions .button{flex:1}.role-assignment-grid{grid-template-columns:1fr}.admin-tabs{margin-right:-13px;padding-right:13px}.admin-tabs button{font-size:9px;padding:8px 10px}}
+@media(max-width:640px){.topbar{height:68px;padding:0 14px}.topbar-actions{gap:8px}.connection-status,.topbar-avatar span,.logout-top{display:none}.content-area{padding:19px 13px 25px}.page-context{display:none}.breadcrumb{font-size:10px;gap:7px}.section-heading{align-items:flex-start;flex-direction:column}.section-heading h2{font-size:24px}.date-chip{white-space:normal}.welcome-banner{padding:23px 20px;min-height:165px}.welcome-banner h1{font-size:27px}.welcome-banner p{max-width:245px;font-size:11px;line-height:1.6}.welcome-mark{font-size:58px;margin-right:0}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat-card{padding:13px;gap:9px}.stat-icon{width:32px;height:32px;font-size:15px}.stat-copy strong{font-size:22px}.stat-copy span{font-size:10px}.stat-copy small{font-size:9px}.quick-links{grid-template-columns:1fr}.quick-links button{padding:13px}.filter-tabs{margin-right:-13px;padding-right:13px}.filter-tabs button{padding:8px 10px;font-size:10px}.table-toolbar{align-items:stretch;flex-direction:column}.toolbar-note{display:none}.resource-grid,.radio-grid,.role-grid{grid-template-columns:1fr}.resource-card>img{height:190px}.form-grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.admin-filters{flex-direction:column}.admin-filters select{width:100%}.candidate-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.candidate-actions{flex-wrap:wrap}.candidate-actions .button{flex:1}.profile-layout{grid-template-columns:1fr}.application-form{grid-template-columns:1fr}.application-summary{grid-template-columns:1fr}.event-card{align-items:flex-start;gap:11px;padding:11px}.event-date-large{width:55px;min-width:55px;height:61px}.event-date-large strong{font-size:23px}.notification-card{align-items:flex-start;flex-wrap:wrap}.notification-card .button{margin-left:49px}.app-footer{padding:12px 14px;gap:8px;font-size:8px}.auth-card,.application-card{padding:24px 19px}.member-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.modal-card{padding:17px}.member-profile-head .avatar{width:60px;height:60px}.modal-actions{join:stretch}.modal-actions .button{flex:1}.role-assignment-grid{grid-template-columns:1fr}.admin-tabs{margin-right:-13px;padding-right:13px}.admin-tabs button{font-size:10px;padding:8px 10px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 `;
