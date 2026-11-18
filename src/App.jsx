@@ -1,11 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db } from './firebase';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from 'firebase/auth';
+import { db } from './firebase';
 import {
   collection,
   onSnapshot,
@@ -20,8 +14,6 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 
-// V1 + V2: catálogo inicial para manter os cargos que já existiam.
-// Os cargos novos e as alterações são guardados na coleção Firestore "roles".
 const PERMISSION_GROUPS = [
   { title: 'Membros', items: [
     ['members.view', 'Consultar membros'],
@@ -114,8 +106,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRoleModalUser, setActiveRoleModalUser] = useState(null);
   
-  // Modal de Revogação de Castigo Avançado
-  const [modalRevocar, setModalRevocar] = useState(null); // { targetUser, punicaoId }
+  const [modalRevocar, setModalRevocar] = useState(null);
 
   // Forms
   const [formCandidatura, setFormCandidatura] = useState({ idade: '', nomeInGame: '', discordTag: '', idInGame: '', killsAtual: '', tempoCidade: '', motivo: '' });
@@ -128,15 +119,17 @@ export default function App() {
   const [formNota, setFormNota] = useState({ targetUserId: '', texto: '' });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser || null);
-      setUserDoc(null);
-      if (firebaseUser) {
-        await fetchUserDocument(firebaseUser.uid);
+    const savedUser = localStorage.getItem('magnatas_email_user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        setUser(parsed);
+        fetchUserDocument(parsed.uid);
+      } catch (e) {
+        localStorage.removeItem('magnatas_email_user');
       }
-      setAuthLoading(false);
-    });
-    return unsubscribe;
+    }
+    setAuthLoading(false);
   }, []);
 
   const fetchUserDocument = async (uid) => {
@@ -157,8 +150,6 @@ export default function App() {
     const unsubUser = onSnapshot(doc(db, 'users', user.uid), (snap) => {
       if (snap.exists()) setUserDoc(snap.data());
     });
-    // ATENÇÃO: esta subscrição lê os perfis de todos os membros. Antes de publicar,
-    // separa notasInternas e punicoes para uma coleção privada e restringe-a nas Security Rules.
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       let list = [];
       snap.forEach(d => list.push({ id: d.id, ...d.data() }));
@@ -228,16 +219,24 @@ export default function App() {
     }
 
     try {
+      const cleanId = emailInput.trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+      const userRef = doc(db, 'users', cleanId);
+      const docSnap = await getDoc(userRef);
+
       if (isRegistering) {
         if (!usernameInput.trim()) {
           setAuthError('Indica um nome de utilizador.');
           return;
         }
-        const credential = await createUserWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+        if (docSnap.exists()) {
+          setAuthError('Já existe uma conta com este e-mail.');
+          return;
+        }
         const newUser = {
-          uid: credential.user.uid,
+          uid: cleanId,
           username: usernameInput.trim(),
           email: emailInput.trim().toLowerCase(),
+          password: passwordInput,
           avatar: 'https://cdn.discordapp.com/embed/avatars/0.png',
           biografia: 'Sem biografia definida.',
           estado: 'pendente_candidatura',
@@ -248,35 +247,35 @@ export default function App() {
           notasInternas: [],
           createdAt: serverTimestamp()
         };
-        await setDoc(doc(db, 'users', credential.user.uid), newUser);
+        await setDoc(userRef, newUser);
+        setUser(newUser);
         setUserDoc(newUser);
+        localStorage.setItem('magnatas_email_user', JSON.stringify(newUser));
       } else {
-        await signInWithEmailAndPassword(auth, emailInput.trim(), passwordInput);
+        if (!docSnap.exists()) {
+          setAuthError('Conta não encontrada.');
+          return;
+        }
+        const data = docSnap.data();
+        if (data.password && data.password !== passwordInput) {
+          setAuthError('Palavra-passe incorreta.');
+          return;
+        }
+        setUser(data);
+        setUserDoc(data);
+        localStorage.setItem('magnatas_email_user', JSON.stringify(data));
       }
     } catch (err) {
-      const messages = {
-        'auth/email-already-in-use': 'Este e-mail já tem uma conta.',
-        'auth/invalid-email': 'O e-mail não é válido.',
-        'auth/weak-password': 'A palavra-passe deve ter pelo menos 6 caracteres.',
-        'auth/invalid-credential': 'E-mail ou palavra-passe incorretos.',
-        'auth/user-not-found': 'Não existe uma conta com este e-mail.',
-        'auth/wrong-password': 'Palavra-passe incorreta.'
-      };
-      setAuthError(messages[err.code] || `Não foi possível autenticar: ${err.message}`);
+      setAuthError(`Erro de autenticação: ${err.message}`);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setUser(null);
-      setUserDoc(null);
-    } catch (err) {
-      setAuthError(`Não foi possível terminar a sessão: ${err.message}`);
-    }
+  const handleLogout = () => {
+    localStorage.removeItem('magnatas_email_user');
+    setUser(null);
+    setUserDoc(null);
   };
 
-  // Junta os cargos antigos (V1) com os cargos dinâmicos guardados no Firestore (V2).
   const allRoles = DEFAULT_ROLES.map(base => { const saved = customRoles.find(role => role.name === base.name); return saved ? { ...base, ...saved, protected: Boolean(base.protected || saved.protected) } : base; })
     .concat(customRoles.filter(role => !DEFAULT_ROLES.some(base => base.name === role.name)));
   const userRoles = userDoc?.roles || [];
@@ -284,8 +283,7 @@ export default function App() {
   const userPermissionSet = new Set(
     allRoles.filter(role => userRoles.includes(role.name)).flatMap(role => role.permissions || [])
   );
-  // Estas verificações controlam a interface. A autorização real tem de ser repetida
-  // nas Firebase Security Rules ou em Cloud Functions; não confies apenas no frontend.
+  
   const hasPermission = (permission) => isFounder || userPermissionSet.has(permission);
   const hasAnyPermission = (permissions) => permissions.some(permission => hasPermission(permission));
   const canManageRoles = hasPermission('roles.manage') && hasPermission('permissions.manage');
@@ -296,7 +294,6 @@ export default function App() {
     'radio.manage', 'logs.view', 'roles.manage', 'permissions.manage'
   ]);
 
-
   const handleFileUpload = (e, callback) => {
     const file = e.target.files[0];
     if (file) {
@@ -306,7 +303,6 @@ export default function App() {
     }
   };
 
-  // Perfil
   const handleSavePerfil = async (e) => {
     e.preventDefault();
     const userRef = doc(db, 'users', user.uid);
@@ -317,7 +313,6 @@ export default function App() {
     alert("Perfil atualizado com sucesso!");
   };
 
-  // Candidatura
   const handleSubmitCandidatura = async (e) => {
     e.preventDefault();
     const userRef = doc(db, 'users', user.uid);
@@ -393,7 +388,6 @@ export default function App() {
     alert(`Membro ${targetUser.username} transferido para ex-membros!`);
   };
 
-  // Notas Internas
   const handleAdicionarNota = async (e) => {
     e.preventDefault();
     if (!hasPermission('notes.create') || !formNota.targetUserId || !formNota.texto) return;
@@ -416,7 +410,6 @@ export default function App() {
     alert("Nota interna adicionada com sucesso!");
   };
 
-  // Roupas
   const handleAddRoupa = async (e) => {
     e.preventDefault();
     if (!hasPermission('clothes.manage')) return alert('Não tens permissão para gerir roupas e kits.');
@@ -430,7 +423,6 @@ export default function App() {
     await deleteDoc(doc(db, 'roupas', id));
   };
 
-  // Rádio
   const handleAddRadio = async (e) => {
     e.preventDefault();
     if (!hasPermission('radio.manage')) return;
@@ -445,7 +437,6 @@ export default function App() {
     await addLog("Rádio", "Eliminou uma frequência de rádio");
   };
 
-  // Regras
   const handleAddRegra = async (e) => {
     e.preventDefault();
     if (!hasPermission('rules.manage')) return;
@@ -459,7 +450,6 @@ export default function App() {
     await deleteDoc(doc(db, 'regras', id));
   };
 
-  // Avisos da Staff
   const handleAddAvisoStaff = async (e) => {
     e.preventDefault();
     if (!hasPermission('notices.manage')) return;
@@ -477,7 +467,6 @@ export default function App() {
     await deleteDoc(doc(db, 'avisos_staff', id));
   };
 
-  // Punições & Revogações com Escolha
   const handleAplicarPunicao = async (e) => {
     e.preventDefault();
     if (!hasPermission('punishments.apply')) return alert('Não tens permissão para aplicar punições.');
@@ -664,10 +653,6 @@ export default function App() {
     );
   }
 
-  // TELA DE BOAS-VINDAS E TUTORIAL RÁPIDO PARA APROVADOS RECENTES (QUANDO CLICAM EM CONTINUAR)
-  // Se o estado é 'aprovado', deixamos entrar mas podemos mostrar um banner de boas-vindas se necessário.
-
-  // BLOQUEIO DE CANDIDATURA, ANÁLISE, REJEIÇÃO, BAN OU EX-MEMBRO
   if (userDoc?.estado === 'pendente_candidatura' || userDoc?.estado === 'pendente_analise' || userDoc?.estado === 'rejeitado' || userDoc?.estado === 'ex_membro' || userDoc?.estado === 'banido') {
     return (
       <div className="min-h-screen bg-[#07080a] text-zinc-100 p-6 flex items-center justify-center font-sans">
@@ -767,7 +752,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#07080a] text-zinc-200 font-sans flex relative selection:bg-red-500 selection:text-white">
       
-      {/* MODAL INTERATIVO PARA REVOGAR CASTIGOS (ESCOLHER ENTRE CANDIDATURA OU ENTRAR DIRETAMENTE) */}
       {modalRevocar && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#101216] border border-zinc-800 p-8 rounded-3xl max-w-md w-full space-y-6 shadow-2xl">
@@ -800,7 +784,6 @@ export default function App() {
         </div>
       )}
 
-      {/* SIDEBAR */}
       <aside className="w-72 bg-[#101216] border-r border-zinc-800/80 flex flex-col justify-between hidden md:flex sticky top-0 h-screen z-20 shadow-xl">
         <div>
           <div className="p-6 border-b border-zinc-800/80 flex items-center gap-3">
@@ -832,7 +815,6 @@ export default function App() {
         )}
       </aside>
 
-      {/* ÁREA DE CONTEÚDO */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-20 border-b border-zinc-800/80 bg-[#101216]/80 backdrop-blur-md px-8 flex justify-between items-center sticky top-0 z-30">
           <div className="flex items-center gap-3">
@@ -844,7 +826,6 @@ export default function App() {
 
         <main className="p-8 space-y-6 flex-1 overflow-y-auto">
 
-          {/* BASE DA GANG */}
           {currentView === 'base' && (
             <div className="space-y-6">
               <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-4 overflow-x-auto">
@@ -892,7 +873,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ROUPAS & KITS */}
           {currentView === 'roupas' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
@@ -933,7 +913,6 @@ export default function App() {
             </div>
           )}
 
-          {/* FREQUÊNCIAS RÁDIO */}
           {currentView === 'radio' && (
             <div className="space-y-6">
               <h2 className="text-lg font-black text-white uppercase tracking-wider">Frequências de Rádio Oficiais</h2>
@@ -967,7 +946,6 @@ export default function App() {
             </div>
           )}
 
-          {/* DISCORD DA GANG */}
           {currentView === 'discord' && (
             <div className="max-w-2xl mx-auto space-y-6 text-center py-6">
               <div className="bg-[#101216] border border-zinc-800/80 p-10 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden">
@@ -988,7 +966,6 @@ export default function App() {
             </div>
           )}
 
-          {/* AVISOS DA STAFF */}
           {currentView === 'avisos' && (
             <div className="space-y-6 max-w-3xl mx-auto">
               <div className="flex justify-between items-center">
@@ -1040,7 +1017,6 @@ export default function App() {
             </div>
           )}
 
-          {/* REGRAS OFICIAIS */}
           {currentView === 'regras' && (
             <div className="space-y-6 max-w-3xl mx-auto">
               <h2 className="text-lg font-black text-white uppercase tracking-wider">Regras Oficiais do Servidor</h2>
@@ -1074,7 +1050,6 @@ export default function App() {
             </div>
           )}
 
-          {/* LISTA DE CARGOS */}
           {currentView === 'cargos' && (
             <div className="space-y-6">
               <h2 className="text-lg font-black text-white uppercase tracking-wider">Lista Completa de Cargos do Servidor</h2>
@@ -1091,7 +1066,6 @@ export default function App() {
             </div>
           )}
 
-          {/* MEUS AVISOS / PUNIÇÕES */}
           {currentView === 'meusavisos' && (
             <div className="space-y-6 max-w-2xl mx-auto">
               <h2 className="text-lg font-black text-white flex items-center gap-2 uppercase tracking-wider">⚠️ Meus Avisos / Histórico de Punições</h2>
@@ -1118,7 +1092,6 @@ export default function App() {
             </div>
           )}
 
-          {/* MEU PERFIL & DISCORD */}
           {currentView === 'perfil' && (
             <div className="max-w-xl mx-auto bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-6 shadow-2xl">
               <div className="flex items-center gap-4 border-b border-zinc-800/80 pb-6">
@@ -1148,7 +1121,6 @@ export default function App() {
             </div>
           )}
 
-          {/* PAINEL ADMIN & STAFF */}
           {currentView === 'admin' && isSupport && (
             <div className="space-y-6">
               <div className="flex gap-2 border-b border-zinc-800/80 pb-4 overflow-x-auto">
@@ -1182,7 +1154,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* GESTÃO DE CARGOS - APENAS MEMBROS ATIVOS NA GANG (EXCLUI KIKADOS E BANIDOS) */}
               {adminTab === 'cargos' && hasPermission('members.view') && (
                 <div className="bg-[#101216] border border-zinc-800/80 rounded-2xl overflow-visible shadow-2xl">
                   <table className="w-full text-left text-xs">
@@ -1237,7 +1208,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* REVOGAÇÃO DE PUNIÇÕES (MELHORADA COM LAYOUT LIMPO EM CARTÕES) */}
               {adminTab === 'punicoes' && hasPermission('punishments.view') && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {hasPermission('punishments.apply') && <form onSubmit={handleAplicarPunicao} className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
@@ -1258,7 +1228,6 @@ export default function App() {
                     <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-red-600/20 transition">Aplicar Punição</button>
                   </form>}
 
-                  {/* REVOGAÇÃO DE CASTIGOS EM CARTÕES LIMPOS */}
                   <div className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
                     <h3 className="text-sm font-black text-emerald-400 uppercase tracking-wider">Revogar Castigos, Bans e Ex-Membros</h3>
                     <p className="text-xs text-zinc-400">Lista de jogadores com restrições ou castigos ativos:</p>
@@ -1306,7 +1275,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* NOTAS INTERNAS */}
               {adminTab === 'notas' && hasPermission('notes.view') && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {hasPermission('notes.create') && <form onSubmit={handleAdicionarNota} className="bg-[#101216] border border-zinc-800/80 p-8 rounded-2xl space-y-4 shadow-xl">
