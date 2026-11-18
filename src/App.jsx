@@ -116,6 +116,7 @@ export default function App() {
   const [noteMemberSearch, setNoteMemberSearch] = useState('');
 
   const [selectedMember, setSelectedMember] = useState(null);
+  const [editingMemberModal, setEditingMemberModal] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
 
@@ -410,20 +411,42 @@ export default function App() {
     }
   };
 
-  const handleEditMember = async target => {
+  const handleOpenEditMember = target => {
     if (!isAdminOrStaff && !hasPermission('members.edit')) return window.alert('Não tens permissão.');
-    const nomeInGame = window.prompt('Nome In-Game:', target.nomeInGame || '');
-    if (nomeInGame === null) return;
-    const discordTag = window.prompt('Nome/Tag do Discord:', target.discordTag || '');
-    if (discordTag === null) return;
-    const idInGame = window.prompt('ID In-Game:', target.idInGame || '');
-    if (idInGame === null) return;
+    setEditingMemberModal({
+      ...target,
+      nomeInGame: target.nomeInGame || '',
+      discordTag: target.discordTag || '',
+      idInGame: target.idInGame || '',
+      roles: Array.isArray(target.roles) ? [...target.roles] : []
+    });
+  };
+
+  const handleSaveMemberEdits = async event => {
+    event.preventDefault();
+    if (!editingMemberModal) return;
     try {
-      await updateDoc(doc(db, 'users', target.id), { nomeInGame: nomeInGame.trim(), discordTag: discordTag.trim(), idInGame: idInGame.trim() });
-      await addLog('Membros', `Editou os dados de ${target.username}. ID In-Game: ${idInGame.trim() || '—'}.`);
+      await updateDoc(doc(db, 'users', editingMemberModal.id), {
+        nomeInGame: editingMemberModal.nomeInGame.trim(),
+        discordTag: editingMemberModal.discordTag.trim(),
+        idInGame: editingMemberModal.idInGame.trim(),
+        roles: editingMemberModal.roles
+      });
+      await addLog('Membros', `Editou os dados e cargos de ${editingMemberModal.username}.`);
+      setEditingMemberModal(null);
+      window.alert('Dados do membro atualizados com sucesso.');
     } catch (error) {
-      window.alert(`Erro ao editar membro: ${error.message}`);
+      window.alert(`Erro ao guardar alterações: ${error.message}`);
     }
+  };
+
+  const handleToggleMemberRole = roleName => {
+    if (!editingMemberModal) return;
+    const currentRoles = editingMemberModal.roles || [];
+    const updatedRoles = currentRoles.includes(roleName)
+      ? currentRoles.filter(r => r !== roleName)
+      : [...currentRoles, roleName];
+    setEditingMemberModal({ ...editingMemberModal, roles: updatedRoles });
   };
 
   const handleToggleHighlight = async target => {
@@ -921,7 +944,7 @@ export default function App() {
 
             {currentView === 'admin' && isAdminOrStaff && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">ACESSO RESTRITO</span><h2>Painel Administrativo</h2><p>Ferramentas de gestão de acordo com as permissões do teu cargo.</p></div><span className="admin-badge">ADMIN / STAFF</span></div><div className="admin-tabs"><button className={adminTab === 'membros' ? 'active' : ''} onClick={() => setAdminTab('membros')}>Membros</button><button className={adminTab === 'candidaturas' ? 'active' : ''} onClick={() => setAdminTab('candidaturas')}>Candidaturas <i>{pendingApplications.length}</i></button><button className={adminTab === 'punicoes' ? 'active' : ''} onClick={() => setAdminTab('punicoes')}>Punições</button><button className={adminTab === 'notas' ? 'active' : ''} onClick={() => setAdminTab('notas')}>Notas internas</button><button className={adminTab === 'cargos' ? 'active' : ''} onClick={() => setAdminTab('cargos')}>Cargos & permissões</button><button className={adminTab === 'logs' ? 'active' : ''} onClick={() => setAdminTab('logs')}>Logs</button></div>
 
-              {adminTab === 'membros' && <div className="panel"><div className="panel-heading"><div><h3>Pesquisar e gerir membros</h3><p>Pesquisa por nome, Discord, e-mail, cargo ou ID In-Game.</p></div><span className="count-chip">{filteredAdminMembers.length} resultados</span></div><div className="admin-filters"><label className="search-box"><span>⌕</span><input value={adminMemberSearch} onChange={event => setAdminMemberSearch(event.target.value)} placeholder="Ex.: 26956, FiveM_Clips, Discord..."/></label><select value={adminMemberStatus} onChange={event => setAdminMemberStatus(event.target.value)}><option value="todos">Todos os estados</option><option value="aprovado">Aprovados</option><option value="pendente_analise">Em análise</option><option value="pendente_candidatura">Pendentes</option><option value="ex_membro">Ex-membros</option><option value="banido">Banidos</option><option value="rejeitado">Rejeitados</option></select><select value={adminMemberRole} onChange={event => setAdminMemberRole(event.target.value)}><option value="todos">Todos os cargos</option>{allRoles.map(role => <option key={role.id} value={role.name}>{role.name}</option>)}</select></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Membro</th><th>Discord</th><th>ID In-Game</th><th>Estado</th><th>Cargos</th><th>Ações</th></tr></thead><tbody>{filteredAdminMembers.map(member => <tr key={member.id}><td><button className="member-cell" onClick={() => openMember(member)}><Avatar member={member}/><span><strong>{getMemberName(member)}</strong><small>@{member.username || 'sem-utilizador'}</small></span></button></td><td>{member.discordTag || '—'}</td><td><strong className="id-value">{member.idInGame || <span className="missing-value">Não indicado</span>}</strong></td><td><StatusPill status={member.estado}/></td><td><div className="role-list">{(member.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)}</div></td><td><div className="row-actions"><button className="icon-button" title="Abrir perfil" onClick={() => openMember(member)}>↗</button><button className="icon-button" title="Editar dados" onClick={() => handleEditMember(member)}>✎</button></div></td></tr>)}</tbody></table></div>{filteredAdminMembers.length === 0 && <EmptyState icon="⌕" title="Nenhum membro encontrado" description="Confirma o termo de pesquisa ou remove os filtros aplicados."/>}</div>}
+              {adminTab === 'membros' && <div className="panel"><div className="panel-heading"><div><h3>Pesquisar e gerir membros</h3><p>Pesquisa por nome, Discord, e-mail, cargo ou ID In-Game.</p></div><span className="count-chip">{filteredAdminMembers.length} resultados</span></div><div className="admin-filters"><label className="search-box"><span>⌕</span><input value={adminMemberSearch} onChange={event => setAdminMemberSearch(event.target.value)} placeholder="Ex.: 26956, FiveM_Clips, Discord..."/></label><select value={adminMemberStatus} onChange={event => setAdminMemberStatus(event.target.value)}><option value="todos">Todos os estados</option><option value="aprovado">Aprovados</option><option value="pendente_analise">Em análise</option><option value="pendente_candidatura">Pendentes</option><option value="ex_membro">Ex-membros</option><option value="banido">Banidos</option><option value="rejeitado">Rejeitados</option></select><select value={adminMemberRole} onChange={event => setAdminMemberRole(event.target.value)}><option value="todos">Todos os cargos</option>{allRoles.map(role => <option key={role.id} value={role.name}>{role.name}</option>)}</select></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Membro</th><th>Discord</th><th>ID In-Game</th><th>Estado</th><th>Cargos</th><th>Ações</th></tr></thead><tbody>{filteredAdminMembers.map(member => <tr key={member.id}><td><button className="member-cell" onClick={() => openMember(member)}><Avatar member={member}/><span><strong>{getMemberName(member)}</strong><small>@{member.username || 'sem-utilizador'}</small></span></button></td><td>{member.discordTag || '—'}</td><td><strong className="id-value">{member.idInGame || <span className="missing-value">Não indicado</span>}</strong></td><td><StatusPill status={member.estado}/></td><td><div className="role-list">{(member.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)}</div></td><td><div className="row-actions"><button className="icon-button" title="Abrir perfil" onClick={() => openMember(member)}>↗</button><button className="icon-button" title="Editar dados" onClick={() => handleOpenEditMember(member)}>✎</button></div></td></tr>)}</tbody></table></div>{filteredAdminMembers.length === 0 && <EmptyState icon="⌕" title="Nenhum membro encontrado" description="Confirma o termo de pesquisa ou remove os filtros aplicados."/>}</div>}
 
               {adminTab === 'candidaturas' && <div className="application-admin-list">{pendingApplications.filter(member => matchesMember(member, applicationSearch)).length > 0 && <label className="search-box"><span>⌕</span><input value={applicationSearch} onChange={event => setApplicationSearch(event.target.value)} placeholder="Pesquisar candidatura por nome, Discord ou ID In-Game..."/></label>}{pendingApplications.filter(member => matchesMember(member, applicationSearch)).map(candidate => <article className="application-admin-card" key={candidate.id}><div className="application-admin-header"><div className="member-cell"><Avatar member={candidate}/><span><strong>{getMemberName(candidate)}</strong><small>@{candidate.username || 'sem-utilizador'} · {candidate.email || 'Sem e-mail'}</small></span></div><StatusPill status={candidate.estado}/></div><div className="candidate-data-grid"><span><small>Nome In-Game</small><strong>{candidate.nomeInGame || '—'}</strong></span><span className="highlight-id"><small>ID In-Game indicado</small><strong>{candidate.idInGame || 'Não indicado'}</strong></span><span><small>Discord</small><strong>{candidate.discordTag || '—'}</strong></span><span><small>Idade</small><strong>{candidate.idade || '—'}</strong></span><span><small>Kills atuais</small><strong>{candidate.killsAtual || '—'}</strong></span><span><small>Tempo de cidade</small><strong>{candidate.tempoCidade || '—'}</strong></span></div><div className="candidate-reason"><small>Motivo da candidatura</small><p>{candidate.motivo || 'Não foi indicado um motivo.'}</p></div><div className="candidate-actions"><button className="button button-outline button-small" onClick={() => openMember(candidate)}>Ver perfil completo</button><button className="button button-danger-soft button-small" onClick={() => handleReprovarCandidatura(candidate)}>Rejeitar</button><button className="button button-primary button-small" onClick={() => handleAprovarCandidatura(candidate)}>Aprovar candidatura</button></div></article>)}{pendingApplications.length === 0 && <EmptyState icon="✓" title="Sem candidaturas pendentes" description="Quando forem submetidas novas candidaturas, aparecerão aqui."/>}{pendingApplications.length > 0 && pendingApplications.filter(member => matchesMember(member, applicationSearch)).length === 0 && <EmptyState icon="⌕" title="Nenhuma candidatura encontrada" description="Experimenta pesquisar por outro nome ou ID In-Game."/>}</div>}
 
@@ -1080,11 +1103,64 @@ export default function App() {
 
               {isAdminOrStaff && (
                 <div className="modal-actions">
-                  <button className="button button-outline" onClick={() => handleEditMember(selectedMember)}>Editar dados</button>
+                  <button className="button button-outline" onClick={() => { const target = selectedMember; setSelectedMember(null); handleOpenEditMember(target); }}>Editar dados & cargos</button>
                   <button className="button button-outline" onClick={() => handleToggleHighlight(selectedMember)}>{selectedMember.destacado ? 'Remover destaque' : 'Destacar membro'}</button>
                   {selectedMember.estado === 'aprovado' && <button className="button button-danger-soft" onClick={() => handleKickMembro(selectedMember)}>Remover membro</button>}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {editingMemberModal && (
+          <div className="modal-backdrop" onClick={() => setEditingMemberModal(null)}>
+            <div className="modal-card" onClick={event => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <span className="eyebrow">EDITAR MEMBRO</span>
+                  <h2>{getMemberName(editingMemberModal)}</h2>
+                </div>
+                <button className="icon-button" onClick={() => setEditingMemberModal(null)}>×</button>
+              </div>
+              <form onSubmit={handleSaveMemberEdits} className="form-stack">
+                <label className="field">
+                  <span>Nome In-Game</span>
+                  <input value={editingMemberModal.nomeInGame} onChange={e => setEditingMemberModal({ ...editingMemberModal, nomeInGame: e.target.value })} required />
+                </label>
+                <label className="field">
+                  <span>Nome / Tag do Discord</span>
+                  <input value={editingMemberModal.discordTag} onChange={e => setEditingMemberModal({ ...editingMemberModal, discordTag: e.target.value })} />
+                </label>
+                <label className="field">
+                  <span>ID In-Game</span>
+                  <input value={editingMemberModal.idInGame} onChange={e => setEditingMemberModal({ ...editingMemberModal, idInGame: e.target.value })} />
+                </label>
+
+                <div className="field">
+                  <span>Atribuir / Gerir Cargos</span>
+                  <div className="role-assignment-grid" style={{ marginTop: '6px' }}>
+                    {allRoles.map(role => {
+                      const isAssigned = (editingMemberModal.roles || []).includes(role.name);
+                      return (
+                        <button
+                          key={role.id || role.name}
+                          type="button"
+                          className={`role-assignment-option ${isAssigned ? 'assigned' : ''}`}
+                          onClick={() => handleToggleMemberRole(role.name)}
+                        >
+                          <RoleBadge role={role.name} allRoles={allRoles} />
+                          <strong>{isAssigned ? '✓' : '+'}</strong>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="modal-actions">
+                  <button type="button" className="button button-outline" onClick={() => setEditingMemberModal(null)}>Cancelar</button>
+                  <button type="submit" className="button button-primary">Guardar alterações</button>
+                </div>
+              </form>
             </div>
           </div>
         )}
