@@ -26,7 +26,7 @@ import { DEFAULT_ROLES, ROLE_COLORS, NAV_ITEMS, DEFAULT_AVATAR, PERMISSION_GROUP
 import { formatDateTime, getRoleColor, getMemberName, matchesMember } from './utils';
 
 /* -------------------------------------------------------------------------- */
-/* MAGNATAS 01! — COMMUNITY PORTAL (CORREÇÃO DE SEGURANÇA E ESTABILIDADE)     */
+/* MAGNATAS 01! — COMMUNITY PORTAL (VERSÃO COMPLETA E ATUALIZADA)            */
 /* -------------------------------------------------------------------------- */
 
 function StatusPill({ status }) {
@@ -145,13 +145,11 @@ export default function App() {
   const userRoles = userDoc?.roles || [];
   const isFounder = userRoles.includes('01 Founder´s') || userRoles.includes('OWNER');
   
-  // Verificação rigorosa para Support ou superior
   const isSupportOrHigher = isFounder || userRoles.some(r => {
     const name = String(r || '').toLowerCase();
     return name.includes('support') || name.includes('suporte') || name.includes('founder') || name.includes('owner') || name.includes('admin') || name.includes('staff');
   });
 
-  // Verificação estricta de acesso ao Painel Admin (apenas quem tem cargos administrativos ou de suporte)
   const isAdminOrStaff = isFounder || isSupportOrHigher || userRoles.some(r => {
     const name = String(r || '').toLowerCase();
     return name.includes('admin') || name.includes('staff') || name.includes('moderador') || name.includes('mod');
@@ -392,7 +390,7 @@ export default function App() {
   };
 
   const handleAprovarCandidatura = async target => {
-    if (!isSupportOrHigher && !hasPermission('applications.review')) return window.alert('Não tens permissão.');
+    if (!isAdminOrStaff && !hasPermission('applications.review')) return window.alert('Não tens permissão.');
     try {
       await updateDoc(doc(db, 'users', target.id), { estado: 'aprovado', candidaturaDecididaEm: serverTimestamp(), candidaturaDecididaPor: currentUsername });
       await addLog('Candidatura aprovada', `Aprovou ${target.username} (ID In-Game: ${target.idInGame || '—'}).`);
@@ -403,7 +401,7 @@ export default function App() {
   };
 
   const handleReprovarCandidatura = async target => {
-    if (!isSupportOrHigher && !hasPermission('applications.review')) return window.alert('Não tens permissão.');
+    if (!isAdminOrStaff && !hasPermission('applications.review')) return window.alert('Não tens permissão.');
     try {
       await updateDoc(doc(db, 'users', target.id), { estado: 'rejeitado', candidaturaDecididaEm: serverTimestamp(), candidaturaDecididaPor: currentUsername });
       await addLog('Candidatura rejeitada', `Rejeitou ${target.username}.`);
@@ -413,7 +411,7 @@ export default function App() {
   };
 
   const handleEditMember = async target => {
-    if (!isSupportOrHigher && !hasPermission('members.edit')) return window.alert('Não tens permissão.');
+    if (!isAdminOrStaff && !hasPermission('members.edit')) return window.alert('Não tens permissão.');
     const nomeInGame = window.prompt('Nome In-Game:', target.nomeInGame || '');
     if (nomeInGame === null) return;
     const discordTag = window.prompt('Nome/Tag do Discord:', target.discordTag || '');
@@ -429,7 +427,7 @@ export default function App() {
   };
 
   const handleToggleHighlight = async target => {
-    if (!isSupportOrHigher && !hasPermission('members.highlight')) return window.alert('Não tens permissão.');
+    if (!isAdminOrStaff && !hasPermission('members.highlight')) return window.alert('Não tens permissão.');
     try {
       await updateDoc(doc(db, 'users', target.id), { destacado: !target.destacado });
       await addLog('Membros', `${target.destacado ? 'Removeu destaque de' : 'Destacou'} ${target.username}.`);
@@ -439,7 +437,7 @@ export default function App() {
   };
 
   const handleKickMembro = async target => {
-    if (!isSupportOrHigher && !hasPermission('members.remove')) return window.alert('Não tens permissão.');
+    if (!isAdminOrStaff && !hasPermission('members.remove')) return window.alert('Não tens permissão.');
     const motivoKick = window.prompt(`Motivo da remoção de ${target.username}:`, 'Reestruturação / Inatividade');
     if (!motivoKick?.trim()) return;
     const kick = {
@@ -456,6 +454,7 @@ export default function App() {
 
   const handleAdicionarNota = async event => {
     event.preventDefault();
+    if (!isAdminOrStaff) return window.alert('Não tens permissão.');
     if (!formNota.targetUserId || !formNota.texto.trim()) return;
     const target = usersList.find(item => item.id === formNota.targetUserId);
     if (!target) return;
@@ -471,7 +470,7 @@ export default function App() {
 
   const handleAddRoupa = async event => {
     event.preventDefault();
-    if (!isSupportOrHigher && !hasPermission('clothes.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('clothes.manage')) return;
     try {
       await addDoc(collection(db, 'roupas'), { ...formRoupa, createdAt: serverTimestamp(), createdBy: currentUsername });
       setFormRoupa({ nome: '', numero: '', imagem: '' });
@@ -482,7 +481,7 @@ export default function App() {
   };
 
   const handleDeleteRoupa = async id => {
-    if (!isSupportOrHigher && !hasPermission('clothes.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('clothes.manage')) return;
     try {
       await deleteDoc(doc(db, 'roupas', id));
       await addLog('Roupas e kits', 'Eliminou um kit.');
@@ -493,7 +492,7 @@ export default function App() {
 
   const handleAddRadio = async event => {
     event.preventDefault();
-    if (!isSupportOrHigher && !hasPermission('radio.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('radio.manage')) return;
     try {
       await addDoc(collection(db, 'radios'), { ...formRadio, createdAt: serverTimestamp() });
       setFormRadio({ titulo: '', frequencia: '', info: '' });
@@ -504,7 +503,7 @@ export default function App() {
   };
 
   const handleDeleteRadio = async id => {
-    if (!isSupportOrHigher && !hasPermission('radio.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('radio.manage')) return;
     try {
       await deleteDoc(doc(db, 'radios', id));
       await addLog('Rádio', 'Eliminou uma frequência.');
@@ -515,7 +514,7 @@ export default function App() {
 
   const handleAddRegra = async event => {
     event.preventDefault();
-    if (!isSupportOrHigher && !hasPermission('rules.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('rules.manage')) return;
     try {
       await addDoc(collection(db, 'regras'), { ...formRegra, ordem: Number(formRegra.ordem), createdAt: serverTimestamp() });
       setFormRegra({ titulo: '', descricao: '', ordem: regras.length + 1 });
@@ -526,7 +525,7 @@ export default function App() {
   };
 
   const handleDeleteRegra = async id => {
-    if (!isSupportOrHigher && !hasPermission('rules.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('rules.manage')) return;
     try {
       await deleteDoc(doc(db, 'regras', id));
       await addLog('Regras', 'Eliminou uma regra.');
@@ -537,7 +536,7 @@ export default function App() {
 
   const handleAddAvisoStaff = async event => {
     event.preventDefault();
-    if (!isSupportOrHigher && !hasPermission('notices.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('notices.manage')) return;
     try {
       await addDoc(collection(db, 'avisos_staff'), { ...formAviso, autor: currentUsername, timestamp: new Date().toLocaleString('pt-PT'), createdAt: serverTimestamp() });
       await createNotification(formAviso.titulo, formAviso.mensagem, formAviso.importancia === 'Urgente' ? 'urgent' : 'notice');
@@ -549,7 +548,7 @@ export default function App() {
   };
 
   const handleDeleteAviso = async id => {
-    if (!isSupportOrHigher && !hasPermission('notices.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('notices.manage')) return;
     try {
       await deleteDoc(doc(db, 'avisos_staff', id));
       await addLog('Avisos', 'Eliminou um aviso.');
@@ -560,6 +559,7 @@ export default function App() {
 
   const handleAplicarPunicao = async event => {
     event.preventDefault();
+    if (!isAdminOrStaff) return window.alert('Não tens permissão.');
     if (!formPunicao.targetUserId) return window.alert('Seleciona um membro.');
     const target = usersList.find(item => item.id === formPunicao.targetUserId);
     if (!target) return;
@@ -579,6 +579,7 @@ export default function App() {
   };
 
   const executarRevogacao = async acaoDestino => {
+    if (!isAdminOrStaff) return window.alert('Não tens permissão.');
     if (!modalRevocar) return;
     const { targetUser, punicaoId } = modalRevocar;
     try {
@@ -603,6 +604,10 @@ export default function App() {
   };
 
   const handleToggleRole = async (targetId, roleName) => {
+    if (!isAdminOrStaff) {
+      window.alert('Acesso negado: Apenas membros da Staff e Support podem gerir cargos.');
+      return;
+    }
     const target = usersList.find(item => item.id === targetId);
     const role = allRoles.find(item => item.name === roleName);
     if (!target || !role) return;
@@ -618,6 +623,7 @@ export default function App() {
   };
 
   const openRoleEditor = role => {
+    if (!isAdminOrStaff) return window.alert('Não tens permissão.');
     try {
       setSelectedRoleId(role?.id || null);
       setRoleForm({
@@ -635,6 +641,7 @@ export default function App() {
 
   const handleSaveRole = async event => {
     event.preventDefault();
+    if (!isAdminOrStaff) return window.alert('Não tens permissão.');
     const cleanName = roleForm.name.trim();
     if (!cleanName) return window.alert('Indica o nome do cargo.');
     if (allRoles.some(role => role.name.toLowerCase() === cleanName.toLowerCase() && role.id !== selectedRoleId)) return window.alert('Já existe um cargo com esse nome.');
@@ -668,6 +675,7 @@ export default function App() {
   };
 
   const handleDeleteRole = async role => {
+    if (!isAdminOrStaff) return window.alert('Não tens permissão.');
     if (role.protected || DEFAULT_ROLES.some(item => item.name === role.name)) return window.alert('Os cargos base do sistema não podem ser eliminados.');
     if (usersList.some(member => (member.roles || []).includes(role.name))) return window.alert('Este cargo ainda está atribuído a membros.');
     if (!window.confirm(`Eliminar o cargo ${role.name}?`)) return;
@@ -701,7 +709,7 @@ export default function App() {
 
   const handleAddEvento = async event => {
     event.preventDefault();
-    if (!isSupportOrHigher && !hasPermission('events.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('events.manage')) return;
     if (!formEvento.titulo.trim() || !formEvento.data || !formEvento.hora) return window.alert('Preenche o título, a data e a hora.');
     try {
       await addDoc(collection(db, 'eventos'), { ...formEvento, autor: currentUsername, createdAt: serverTimestamp() });
@@ -714,7 +722,7 @@ export default function App() {
   };
 
   const handleDeleteEvento = async eventItem => {
-    if (!isSupportOrHigher && !hasPermission('events.manage')) return;
+    if (!isAdminOrStaff && !hasPermission('events.manage')) return;
     if (!window.confirm(`Eliminar o evento ${eventItem.titulo}?`)) return;
     try {
       await deleteDoc(doc(db, 'eventos', eventItem.id));
@@ -847,7 +855,6 @@ export default function App() {
           <nav className="sidebar-nav">
             {visibleNav.map(group => <div className="nav-group" key={group.section}><div className="nav-label">{group.section}</div>{group.items.map(item => <button key={item[0]} onClick={() => navigate(item[0])} className={`nav-item ${currentView === item[0] ? 'active' : ''}`}><span className="nav-icon">{item[1]}</span><span>{item[2]}</span>{item[0] === 'notificacoes' && unreadNotifications.length > 0 && <i className="nav-count">{unreadNotifications.length}</i>}</button>)}</div>)}
             
-            {/* Secção de Administração visível APENAS para Admins/Suporte */}
             {isAdminOrStaff && (
               <div className="nav-group">
                 <div className="nav-label">Administração</div>
@@ -891,7 +898,6 @@ export default function App() {
               <div className="welcome-banner"><div><span className="eyebrow light">COMMUNITY OVERVIEW</span><h1>Olá, {getMemberName(userDoc).split(' ')[0]}.</h1><p>Este é o centro de informação e atividade da comunidade Magnatas 01!.</p></div><div className="welcome-mark">M<span>01!</span></div></div>
               <div className="section-heading"><div><span className="eyebrow">VISÃO GERAL</span><h2>Resumo da comunidade</h2><p>Indicadores e informações importantes num só lugar.</p></div><span className="date-chip">{new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
               
-              {/* ESTATÍSTICAS CONDICIONADAS: Apenas Support ou superior vê Contas Registadas e Candidaturas */}
               <div className="stats-grid">
                 {isSupportOrHigher && <StatCard label="Membros registados" value={stats.total} detail="Total de contas" icon="♧" tone="red"/>}
                 <StatCard label="Membros ativos" value={stats.active} detail="Aprovados e disponíveis" icon="✓" tone="green"/>
@@ -912,19 +918,19 @@ export default function App() {
               </div>
             </section>}
 
-            {currentView === 'roupas' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">RECURSOS DA COMUNIDADE</span><h2>Roupas & Kits</h2><p>Consulta os conjuntos oficiais e respetivos números.</p></div></div>{(isSupportOrHigher || hasPermission('clothes.manage')) && <form className="panel form-panel" onSubmit={handleAddRoupa}><div className="panel-heading"><div><h3>Adicionar kit</h3><p>Publica um novo conjunto na biblioteca.</p></div></div><div className="form-grid"><label className="field"><span>Nome do kit</span><input value={formRoupa.nome} onChange={event => setFormRoupa({ ...formRoupa, nome: event.target.value })} required/></label><label className="field"><span>Número no vestuário</span><input value={formRoupa.numero} onChange={event => setFormRoupa({ ...formRoupa, numero: event.target.value })} placeholder="#145" required/></label><label className="field field-wide"><span>URL da imagem</span><input type="url" value={formRoupa.imagem} onChange={event => setFormRoupa({ ...formRoupa, imagem: event.target.value })} placeholder="https://..."/></label><label className="field field-wide"><span>Ou carregar imagem (até 600 KB)</span><input type="file" accept="image/*" onChange={event => handleFileUpload(event, result => setFormRoupa(current => ({ ...current, imagem: result })))}/></label></div><button className="button button-primary">Guardar kit</button></form>}<div className="resource-grid">{roupas.map(item => <article className="resource-card" key={item.id}><img src={item.imagem || DEFAULT_AVATAR} alt={item.nome} onError={event => { event.currentTarget.src = DEFAULT_AVATAR; }}/><div className="resource-card-body"><div><h3>{item.nome}</h3><span className="resource-number">N.º {item.numero}</span></div>{(isSupportOrHigher || hasPermission('clothes.manage')) && <button className="button button-danger-soft button-small" onClick={() => handleDeleteRoupa(item.id)}>Remover</button>}</div></article>)}</div>{roupas.length === 0 && <EmptyState icon="▣" title="Ainda não existem kits" description="Os kits publicados aparecerão aqui."/>}</section>}
+            {currentView === 'roupas' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">RECURSOS DA COMUNIDADE</span><h2>Roupas & Kits</h2><p>Consulta os conjuntos oficiais e respetivos números.</p></div></div>{isAdminOrStaff && <form className="panel form-panel" onSubmit={handleAddRoupa}><div className="panel-heading"><div><h3>Adicionar kit</h3><p>Publica um novo conjunto na biblioteca.</p></div></div><div className="form-grid"><label className="field"><span>Nome do kit</span><input value={formRoupa.nome} onChange={event => setFormRoupa({ ...formRoupa, nome: event.target.value })} required/></label><label className="field"><span>Número no vestuário</span><input value={formRoupa.numero} onChange={event => setFormRoupa({ ...formRoupa, numero: event.target.value })} placeholder="#145" required/></label><label className="field field-wide"><span>URL da imagem</span><input type="url" value={formRoupa.imagem} onChange={event => setFormRoupa({ ...formRoupa, imagem: event.target.value })} placeholder="https://..."/></label><label className="field field-wide"><span>Ou carregar imagem (até 600 KB)</span><input type="file" accept="image/*" onChange={event => handleFileUpload(event, result => setFormRoupa(current => ({ ...current, imagem: result })))}/></label></div><button className="button button-primary">Guardar kit</button></form>}<div className="resource-grid">{roupas.map(item => <article className="resource-card" key={item.id}><img src={item.imagem || DEFAULT_AVATAR} alt={item.nome} onError={event => { event.currentTarget.src = DEFAULT_AVATAR; }}/><div className="resource-card-body"><div><h3>{item.nome}</h3><span className="resource-number">N.º {item.numero}</span></div>{isAdminOrStaff && <button className="button button-danger-soft button-small" onClick={() => handleDeleteRoupa(item.id)}>Remover</button>}</div></article>)}</div>{roupas.length === 0 && <EmptyState icon="▣" title="Ainda não existem kits" description="Os kits publicados aparecerão aqui."/>}</section>}
 
-            {currentView === 'radio' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">COMUNICAÇÃO</span><h2>Frequências Rádio</h2><p>Consulta as frequências oficiais e a sua finalidade.</p></div></div>{(isSupportOrHigher || hasPermission('radio.manage')) && <form className="panel form-panel" onSubmit={handleAddRadio}><div className="panel-heading"><div><h3>Nova frequência</h3><p>Adiciona uma frequência para a comunidade.</p></div></div><div className="form-grid"><label className="field"><span>Título</span><input value={formRadio.titulo} onChange={event => setFormRadio({ ...formRadio, titulo: event.target.value })} placeholder="Rádio principal" required/></label><label className="field"><span>Frequência</span><input value={formRadio.frequencia} onChange={event => setFormRadio({ ...formRadio, frequencia: event.target.value })} placeholder="100.0" required/></label><label className="field field-wide"><span>Informação</span><input value={formRadio.info} onChange={event => setFormRadio({ ...formRadio, info: event.target.value })} placeholder="Informações de utilização" required/></label></div><button className="button button-primary">Publicar frequência</button></form>}<div className="resource-grid radio-grid">{radiosList.map(item => <article className="radio-card" key={item.id}><div className="radio-symbol">◖</div><div className="radio-copy"><h3>{item.titulo}</h3><strong>{item.frequencia} MHz</strong><p>{item.info}</p></div>{(isSupportOrHigher || hasPermission('radio.manage')) && <button className="icon-button danger" onClick={() => handleDeleteRadio(item.id)} title="Eliminar frequência">×</button>}</article>)}</div>{radiosList.length === 0 && <EmptyState icon="◖" title="Sem frequências" description="As frequências adicionadas serão apresentadas aqui."/>}</section>}
+            {currentView === 'radio' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">COMUNICAÇÃO</span><h2>Frequências Rádio</h2><p>Consulta as frequências oficiais e a sua finalidade.</p></div></div>{isAdminOrStaff && <form className="panel form-panel" onSubmit={handleAddRadio}><div className="panel-heading"><div><h3>Nova frequência</h3><p>Adiciona uma frequência para a comunidade.</p></div></div><div className="form-grid"><label className="field"><span>Título</span><input value={formRadio.titulo} onChange={event => setFormRadio({ ...formRadio, titulo: event.target.value })} placeholder="Rádio principal" required/></label><label className="field"><span>Frequência</span><input value={formRadio.frequencia} onChange={event => setFormRadio({ ...formRadio, frequencia: event.target.value })} placeholder="100.0" required/></label><label className="field field-wide"><span>Informação</span><input value={formRadio.info} onChange={event => setFormRadio({ ...formRadio, info: event.target.value })} placeholder="Informações de utilização" required/></label></div><button className="button button-primary">Publicar frequência</button></form>}<div className="resource-grid radio-grid">{radiosList.map(item => <article className="radio-card" key={item.id}><div className="radio-symbol">◖</div><div className="radio-copy"><h3>{item.titulo}</h3><strong>{item.frequencia} MHz</strong><p>{item.info}</p></div>{isAdminOrStaff && <button className="icon-button danger" onClick={() => handleDeleteRadio(item.id)} title="Eliminar frequência">×</button>}</article>)}</div>{radiosList.length === 0 && <EmptyState icon="◖" title="Sem frequências" description="As frequências adicionadas serão apresentadas aqui."/>}</section>}
 
-            {currentView === 'discord' && <section className="page-section animate-in"><div className="discord-panel"><div className="discord-emblem">◌</div><span className="eyebrow">LIGA-TE À COMUNIDADE</span><h2>Discord Oficial</h2><p>Entra no nosso servidor para acompanhar comunicados, participar nas conversas, receber apoio e estar a par das atividades.</p><a className="button button-primary" href="https://discord.gg" target="_blank" rel="noreferrer">Abrir Discord oficial ↗</a><small>Substitui o endereço genérico pelo convite permanente da comunidade.</small></div></section>}
+            {currentView === 'discord' && <section className="page-section animate-in"><div className="discord-panel"><div className="discord-emblem">◌</div><span className="eyebrow">LIGA-TE À COMUNIDADE</span><h2>Discord Oficial</h2><p>Entra no nosso servidor para acompanhar comunicados, participar nas conversas, receber apoio e estar a par das atividades.</p><a className="button button-primary" href="https://discord.gg/MRdedT4nKd" target="_blank" rel="noreferrer">Abrir Discord oficial ↗</a><small>Servidor oficial Magnatas 01!</small></div></section>}
 
-            {currentView === 'avisos' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">COMUNICAÇÃO OFICIAL</span><h2>Avisos da Staff</h2><p>Comunicados e informações publicados pela equipa.</p></div></div>{(isSupportOrHigher || hasPermission('notices.manage')) && <form className="panel form-panel" onSubmit={handleAddAvisoStaff}><div className="panel-heading"><div><h3>Publicar comunicado</h3><p>O aviso também gera uma notificação interna.</p></div></div><div className="form-grid"><label className="field"><span>Título</span><input value={formAviso.titulo} onChange={event => setFormAviso({ ...formAviso, titulo: event.target.value })} required/></label><label className="field"><span>Importância</span><select value={formAviso.importancia} onChange={event => setFormAviso({ ...formAviso, importancia: event.target.value })}><option>Normal</option><option>Importante</option><option>Urgente</option></select></label><label className="field field-wide"><span>Mensagem</span><textarea rows="4" value={formAviso.mensagem} onChange={event => setFormAviso({ ...formAviso, mensagem: event.target.value })} required/></label></div><button className="button button-primary">Publicar aviso</button></form>}<div className="notice-list">{avisosStaff.map(item => <article className={`notice-card ${item.importancia === 'Urgente' ? 'notice-urgent' : ''}`} key={item.id}><div className="notice-top"><span className={`notice-tag ${item.importancia === 'Urgente' ? 'urgent' : item.importancia === 'Importante' ? 'important' : ''}`}>{item.importancia || 'Normal'}</span><small>{item.timestamp || formatDateTime(item.createdAt)}</small></div><h3>{item.titulo}</h3><p>{item.mensagem}</p><div className="notice-footer"><span>Publicado por <strong>{item.autor || 'Staff'}</strong></span>{(isSupportOrHigher || hasPermission('notices.manage')) && <button className="text-button danger-text" onClick={() => handleDeleteAviso(item.id)}>Eliminar aviso</button>}</div></article>)}</div>{avisosStaff.length === 0 && <EmptyState icon="◉" title="Sem comunicados" description="Ainda não foram publicados avisos."/>}</section>}
+            {currentView === 'avisos' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">COMUNICAÇÃO OFICIAL</span><h2>Avisos da Staff</h2><p>Comunicados e informações publicados pela equipa.</p></div></div>{isAdminOrStaff && <form className="panel form-panel" onSubmit={handleAddAvisoStaff}><div className="panel-heading"><div><h3>Publicar comunicado</h3><p>O aviso também gera uma notificação interna.</p></div></div><div className="form-grid"><label className="field"><span>Título</span><input value={formAviso.titulo} onChange={event => setFormAviso({ ...formAviso, titulo: event.target.value })} required/></label><label className="field"><span>Importância</span><select value={formAviso.importancia} onChange={event => setFormAviso({ ...formAviso, importancia: event.target.value })}><option>Normal</option><option>Importante</option><option>Urgente</option></select></label><label className="field field-wide"><span>Mensagem</span><textarea rows="4" value={formAviso.mensagem} onChange={event => setFormAviso({ ...formAviso, mensagem: event.target.value })} required/></label></div><button className="button button-primary">Publicar aviso</button></form>}<div className="notice-list">{avisosStaff.map(item => <article className={`notice-card ${item.importancia === 'Urgente' ? 'notice-urgent' : ''}`} key={item.id}><div className="notice-top"><span className={`notice-tag ${item.importancia === 'Urgente' ? 'urgent' : item.importancia === 'Importante' ? 'important' : ''}`}>{item.importancia || 'Normal'}</span><small>{item.timestamp || formatDateTime(item.createdAt)}</small></div><h3>{item.titulo}</h3><p>{item.mensagem}</p><div className="notice-footer"><span>Publicado por <strong>{item.autor || 'Staff'}</strong></span>{isAdminOrStaff && <button className="text-button danger-text" onClick={() => handleDeleteAviso(item.id)}>Eliminar aviso</button>}</div></article>)}</div>{avisosStaff.length === 0 && <EmptyState icon="◉" title="Sem comunicados" description="Ainda não foram publicados avisos."/>}</section>}
 
-            {currentView === 'regras' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">DOCUMENTAÇÃO</span><h2>Regras Oficiais</h2><p>Consulta as normas e orientações da comunidade.</p></div></div>{(isSupportOrHigher || hasPermission('rules.manage')) && <form className="panel form-panel" onSubmit={handleAddRegra}><div className="form-grid"><label className="field"><span>Título da regra</span><input value={formRegra.titulo} onChange={event => setFormRegra({ ...formRegra, titulo: event.target.value })} required/></label><label className="field"><span>Ordem</span><input type="number" min="1" value={formRegra.ordem} onChange={event => setFormRegra({ ...formRegra, ordem: event.target.value })} required/></label><label className="field field-wide"><span>Descrição</span><textarea rows="3" value={formRegra.descricao} onChange={event => setFormRegra({ ...formRegra, descricao: event.target.value })} required/></label></div><button className="button button-primary">Adicionar regra</button></form>}<div className="rules-list">{regras.map((item, index) => <article className="rule-card" key={item.id}><span className="rule-index">{String(index + 1).padStart(2, '0')}</span><div><h3>{item.titulo}</h3><p>{item.descricao}</p></div>{(isSupportOrHigher || hasPermission('rules.manage')) && <button className="icon-button danger" onClick={() => handleDeleteRegra(item.id)}>×</button>}</article>)}</div>{regras.length === 0 && <EmptyState icon="≡" title="Sem regras publicadas" description="As regras oficiais aparecerão aqui."/>}</section>}
+            {currentView === 'regras' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">DOCUMENTAÇÃO</span><h2>Regras Oficiais</h2><p>Consulta as normas e orientações da comunidade.</p></div></div>{isAdminOrStaff && <form className="panel form-panel" onSubmit={handleAddRegra}><div className="form-grid"><label className="field"><span>Título da regra</span><input value={formRegra.titulo} onChange={event => setFormRegra({ ...formRegra, titulo: event.target.value })} required/></label><label className="field"><span>Ordem</span><input type="number" min="1" value={formRegra.ordem} onChange={event => setFormRegra({ ...formRegra, ordem: event.target.value })} required/></label><label className="field field-wide"><span>Descrição</span><textarea rows="3" value={formRegra.descricao} onChange={event => setFormRegra({ ...formRegra, descricao: event.target.value })} required/></label></div><button className="button button-primary">Adicionar regra</button></form>}<div className="rules-list">{regras.map((item, index) => <article className="rule-card" key={item.id}><span className="rule-index">{String(index + 1).padStart(2, '0')}</span><div><h3>{item.titulo}</h3><p>{item.descricao}</p></div>{isAdminOrStaff && <button className="icon-button danger" onClick={() => handleDeleteRegra(item.id)}>×</button>}</article>)}</div>{regras.length === 0 && <EmptyState icon="≡" title="Sem regras publicadas" description="As regras oficiais aparecerão aqui."/>}</section>}
 
             {currentView === 'cargos' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">ESTRUTURA DA COMUNIDADE</span><h2>Lista de Cargos</h2><p>Consulta os cargos e a quantidade de membros associados.</p></div>{isAdminOrStaff && <button className="button button-primary" onClick={() => { setAdminTab('cargos'); navigate('admin'); openRoleEditor(null); }}>＋ Criar cargo</button>}</div><div className="role-grid">{allRoles.map(role => <article className="role-card" key={role.id}><div className={`role-symbol ${getRoleColor(role)}`}>◇</div><div className="role-card-main"><h3>{role.name}</h3><p>{role.description || (role.protected ? 'Cargo de liderança protegido.' : 'Cargo da comunidade.')}</p><small>{usersList.filter(member => (member.roles || []).includes(role.name)).length} membros</small></div><span className={`role-badge ${getRoleColor(role)}`}>{role.protected ? 'Protegido' : 'Cargo'}</span></article>)}</div></section>}
 
-            {currentView === 'calendario' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">AGENDA DA COMUNIDADE</span><h2>Calendário de eventos</h2><p>Reuniões, alinhamentos e atividades agendadas.</p></div></div>{(isSupportOrHigher || hasPermission('events.manage')) && <form className="panel form-panel" onSubmit={handleAddEvento}><div className="panel-heading"><div><h3>Adicionar evento</h3><p>Os membros recebem uma notificação interna quando publicas um evento.</p></div></div><div className="form-grid"><label className="field"><span>Nome do evento</span><input value={formEvento.titulo} onChange={event => setFormEvento({ ...formEvento, titulo: event.target.value })} required/></label><label className="field"><span>Tipo</span><select value={formEvento.tipo} onChange={event => setFormEvento({ ...formEvento, tipo: event.target.value })}><option>Reunião</option><option>Evento</option><option>Treino</option><option>Alinhamento</option><option>Outro</option></select></label><label className="field"><span>Data</span><input type="date" value={formEvento.data} onChange={event => setFormEvento({ ...formEvento, data: event.target.value })} required/></label><label className="field"><span>Hora</span><input type="time" value={formEvento.hora} onChange={event => setFormEvento({ ...formEvento, hora: event.target.value })} required/></label><label className="field field-wide"><span>Descrição</span><textarea rows="3" value={formEvento.descricao} onChange={event => setFormEvento({ ...formEvento, descricao: event.target.value })}/></label></div><button className="button button-primary">Guardar evento</button></form>}<div className="event-list">{sortedEvents.map(item => <article className="event-card" key={item.id}><div className="event-date-large"><strong>{item.data?.slice(8, 10) || '—'}</strong><span>{item.data ? new Date(`${item.data}T12:00:00`).toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' }) : 'Data a definir'}</span></div><div className="event-details"><span className="notice-tag">{item.tipo || 'Evento'}</span><h3>{item.titulo}</h3><p>{item.descricao || 'Sem descrição adicional.'}</p><small>{item.hora || 'Hora a definir'} · Criado por {item.autor || 'Staff'}</small></div>{(isSupportOrHigher || hasPermission('events.manage')) && <button className="icon-button danger" onClick={() => handleDeleteEvento(item)}>×</button>}</article>)}</div>{sortedEvents.length === 0 && <EmptyState icon="▦" title="Calendário vazio" description="Quando forem criados eventos, aparecerão aqui."/>}</section>}
+            {currentView === 'calendario' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">AGENDA DA COMUNIDADE</span><h2>Calendário de eventos</h2><p>Reuniões, alinhamentos e atividades agendadas.</p></div></div>{isAdminOrStaff && <form className="panel form-panel" onSubmit={handleAddEvento}><div className="panel-heading"><div><h3>Adicionar evento</h3><p>Os membros recebem uma notificação interna quando publicas um evento.</p></div></div><div className="form-grid"><label className="field"><span>Nome do evento</span><input value={formEvento.titulo} onChange={event => setFormEvento({ ...formEvento, titulo: event.target.value })} required/></label><label className="field"><span>Tipo</span><select value={formEvento.tipo} onChange={event => setFormEvento({ ...formEvento, tipo: event.target.value })}><option>Reunião</option><option>Evento</option><option>Treino</option><option>Alinhamento</option><option>Outro</option></select></label><label className="field"><span>Data</span><input type="date" value={formEvento.data} onChange={event => setFormEvento({ ...formEvento, data: event.target.value })} required/></label><label className="field"><span>Hora</span><input type="time" value={formEvento.hora} onChange={event => setFormEvento({ ...formEvento, hora: event.target.value })} required/></label><label className="field field-wide"><span>Descrição</span><textarea rows="3" value={formEvento.descricao} onChange={event => setFormEvento({ ...formEvento, descricao: event.target.value })}/></label></div><button className="button button-primary">Guardar evento</button></form>}<div className="event-list">{sortedEvents.map(item => <article className="event-card" key={item.id}><div className="event-date-large"><strong>{item.data?.slice(8, 10) || '—'}</strong><span>{item.data ? new Date(`${item.data}T12:00:00`).toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' }) : 'Data a definir'}</span></div><div className="event-details"><span className="notice-tag">{item.tipo || 'Evento'}</span><h3>{item.titulo}</h3><p>{item.descricao || 'Sem descrição adicional.'}</p><small>{item.hora || 'Hora a definir'} · Criado por {item.autor || 'Staff'}</small></div>{isAdminOrStaff && <button className="icon-button danger" onClick={() => handleDeleteEvento(item)}>×</button>}</article>)}</div>{sortedEvents.length === 0 && <EmptyState icon="▦" title="Calendário vazio" description="Quando forem criados eventos, aparecerão aqui."/>}</section>}
 
             {currentView === 'notificacoes' && <section className="page-section animate-in"><div className="section-heading"><div><span className="eyebrow">CENTRO DE ATIVIDADE</span><h2>Notificações</h2><p>Acompanha os avisos e novidades da comunidade.</p></div><button className="button button-outline" onClick={markAllNotificationsRead} disabled={unreadNotifications.length === 0}>Marcar tudo como lido</button></div><div className="notification-list">{notifications.map(item => { const read = (item.readBy || []).includes(user.uid); return <article className={`notification-card ${read ? 'read' : 'unread'}`} key={item.id}><div className="notification-symbol">{item.tipo === 'urgent' ? '!' : item.tipo === 'event' ? '▦' : '◉'}</div><div className="notification-content"><h3>{item.titulo}</h3><p>{item.mensagem}</p><small>{item.autor || 'Sistema'} · {formatDateTime(item.createdAt)}</small></div>{!read && <button className="button button-outline button-small" onClick={() => markNotificationRead(item.id)}>Marcar como lida</button>}</article>; })}</div>{notifications.length === 0 && <EmptyState icon="♢" title="Estás em dia" description="Ainda não tens notificações."/>}</section>}
 
@@ -1036,7 +1042,7 @@ export default function App() {
 
               {adminTab === 'cargos' && <div className="roles-admin-layout"><div className="panel"><div className="panel-heading"><div><h3>Cargos existentes</h3><p>Seleciona um cargo para editar as permissões.</p></div><button className="button button-primary button-small" onClick={() => openRoleEditor(null)}>＋ Novo cargo</button></div><div className="role-admin-list">{allRoles.map(role => <div className="role-admin-row" key={role.id}><div><div className="role-list"><RoleBadge role={role.name} allRoles={allRoles}/>{role.protected && <span className="tiny-tag">Protegido</span>}</div><small>{role.description || `${(role.permissions || []).length} permissões configuradas`}</small></div><div className="row-actions"><button className="icon-button" onClick={() => openRoleEditor(role)} title="Editar cargo">✎</button>{!role.protected && !DEFAULT_ROLES.some(item => item.name === role.name) && <button className="icon-button danger" onClick={() => handleDeleteRole(role)} title="Eliminar cargo">×</button>}</div></div>)}</div></div><div className="panel role-help"><div className="help-symbol">◇</div><h3>Permissões por cargo</h3><p>As permissões são atribuídas individualmente. Um utilizador herda as permissões de todos os cargos associados à sua conta.</p><div className="help-note">Os cargos Founder e Owner estão protegidos.</div></div></div>}
 
-              {adminTab === 'logs' && <div className="panel"><div className="panel-heading"><div><h3>Registo de atividade</h3><p>Últimas 100 ações administrativas disponíveis.</p></div></div><div className="logs-list">{logsList.map(item => <div className="log-row" key={item.id}><span className="log-dot"/><div><strong>{item.acao}</strong><p>{item.detalhe}</p><small>{item.autor}</small></div><time>{item.timestamp || formatDateTime(item.createdAt)}</time></div>)}{logsList.length === 0 && <EmptyState icon="≡" title="Sem registos" description="As ações administrativas serão registadas aqui."/>}</div></div>}
+              {adminTab === 'logs' && <div className="panel"><div className="panel-heading"><div><h3>Registo de atividade</h3><p>Últimas 100 ações administrativas disponíveis.</p></div></div><div className="logs-list">{logsList.map(item => <div className="log-row" key={item.id}><span className="log-dot"/><div><strong>{item.acao}</strong><p>{item.detalhe}</p><small>{item.autor}</small></div><time>{item.timestamp || formatDateTime(item.createdAt)}</time></div>)}{logsList.length === 0 && <EmptyState icon="≡" title="Sem registos" description="As ações administrativas serão registadas hierarquicamente aqui."/>}</div></div>}
             </section>}
           </div>
           <footer className="app-footer"><span>MAGNATAS 01! · COMMUNITY PORTAL</span><span>Construído para a comunidade</span></footer>
@@ -1044,7 +1050,37 @@ export default function App() {
 
         {notificationMenuOpen && <button className="notification-backdrop" onClick={() => setNotificationMenuOpen(false)} aria-label="Fechar notificações"/>}
 
-        {selectedMember && <div className="modal-backdrop" onClick={() => setSelectedMember(null)}><div className="modal-card member-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">PERFIL DE MEMBRO</span><h2>Informações do membro</h2></div><button className="icon-button" onClick={() => setSelectedMember(null)}>×</button></div><div className="member-profile-head"><Avatar member={selectedMember} size="xl"/><div><h2>{getMemberName(selectedMember)}</h2><p>@{selectedMember.username || 'sem-utilizador'} · {selectedMember.discordTag || 'Discord não indicado'}</p><StatusPill status={selectedMember.estado}/></div></div><div className="member-detail-grid"><span><small>ID In-Game</small><strong className="id-value">{selectedMember.idInGame || 'Não indicado'}</strong></span><span><small>Idade</small><strong>{selectedMember.idade || '—'}</strong></span><span><small>Kills</small><strong>{selectedMember.killsAtual || '—'}</strong></span><span><small>Tempo de cidade</small><strong>{selectedMember.tempoCidade || '—'}</strong></span><span><small>E-mail</small><strong>{selectedMember.email || '—'}</strong></span><span><small>Data de registo</small><strong>{formatDateTime(selectedMember.createdAt)}</strong></span></div><div className="member-detail-block"><small>Cargos</small><div className="role-list">{(selectedMember.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)}</div></div><div className="member-detail-block"><small>Biografia</small><p>{selectedMember.biografia || 'Sem biografia definida.'}</p></div><div className="member-detail-block"><small>Gerir cargos do membro</small><div className="role-assignment-grid">{allRoles.map(role => <button type="button" key={role.id} disabled={role.protected && !isFounder} className={`role-assignment-option ${(selectedMember.roles || []).includes(role.name) ? 'assigned' : ''}`} onClick={() => handleToggleRole(selectedMember.id, role.name)}><span className={`role-badge ${getRoleColor(role)}`}>{role.name}</span><strong>{(selectedMember.roles || []).includes(role.name) ? '✓' : '+'}</strong></button>)}</div></div><div className="member-detail-block"><small>Histórico de punições</small>{selectedMember.punicoes?.length ? selectedMember.punicoes.map((item, index) => <p className="modal-history-line" key={item.id || index}><strong>{item.tipo}</strong> — {item.motivo} <small>{item.data}</small></p>) : <p>Sem punições registadas.</p>}</div><div className="member-detail-block"><small>Notas internas da Staff</small>{selectedMember.notasInternas?.length ? selectedMember.notasInternas.map((item, index) => <p className="modal-history-line" key={item.id || index}>{item.texto}<small>{item.autor} · {item.data}</small></p>) : <p>Sem notas internas.</p>}</div><div className="modal-actions"><button className="button button-outline" onClick={() => handleEditMember(selectedMember)}>Editar dados</button><button className="button button-outline" onClick={() => handleToggleHighlight(selectedMember)}>{selectedMember.destacado ? 'Remover destaque' : 'Destacar membro'}</button>{selectedMember.estado === 'aprovado' && <button className="button button-danger-soft" onClick={() => handleKickMembro(selectedMember)}>Remover membro</button>}</div></div></div>}
+        {selectedMember && <div className="modal-backdrop" onClick={() => setSelectedMember(null)}><div className="modal-card member-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">PERFIL DE MEMBRO</span><h2>Informações do membro</h2></div><button className="icon-button" onClick={() => setSelectedMember(null)}>×</button></div><div className="member-profile-head"><Avatar member={selectedMember} size="xl"/><div><h2>{getMemberName(selectedMember)}</h2><p>@{selectedMember.username || 'sem-utilizador'} · {selectedMember.discordTag || 'Discord não indicado'}</p><StatusPill status={selectedMember.estado}/></div></div><div className="member-detail-grid"><span><small>ID In-Game</small><strong className="id-value">{selectedMember.idInGame || 'Não indicado'}</strong></span><span><small>Idade</small><strong>{selectedMember.idade || '—'}</strong></span><span><small>Kills</small><strong>{selectedMember.killsAtual || '—'}</strong></span><span><small>Tempo de cidade</small><strong>{selectedMember.tempoCidade || '—'}</strong></span><span><small>E-mail</small><strong>{selectedMember.email || '—'}</strong></span><span><small>Data de registo</small><strong>{formatDateTime(selectedMember.createdAt)}</strong></span></div>
+          
+          <div className="member-detail-block">
+            <small>Cargos do membro</small>
+            {isAdminOrStaff ? (
+              <div className="role-assignment-grid">
+                {allRoles.map(role => (
+                  <button 
+                    type="button" 
+                    key={role.id} 
+                    disabled={role.protected && !isFounder} 
+                    className={`role-assignment-option ${(selectedMember.roles || []).includes(role.name) ? 'assigned' : ''}`} 
+                    onClick={() => handleToggleRole(selectedMember.id, role.name)}
+                  >
+                    <span className={`role-badge ${getRoleColor(role)}`}>{role.name}</span>
+                    <strong>{(selectedMember.roles || []).includes(role.name) ? '✓' : '+'}</strong>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="role-list" style={{ marginTop: '6px' }}>
+                {(selectedMember.roles || []).length > 0 ? (
+                  (selectedMember.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)
+                ) : (
+                  <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Sem cargos atribuídos.</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="member-detail-block"><small>Biografia</small><p>{selectedMember.biografia || 'Sem biografia definida.'}</p></div><div className="member-detail-block"><small>Histórico de punições</small>{selectedMember.punicoes?.length ? selectedMember.punicoes.map((item, index) => <p className="modal-history-line" key={item.id || index}><strong>{item.tipo}</strong> — {item.motivo} <small>{item.data}</small></p>) : <p>Sem punições registadas.</p>}</div><div className="member-detail-block"><small>Notas internas da Staff</small>{selectedMember.notasInternas?.length ? selectedMember.notasInternas.map((item, index) => <p className="modal-history-line" key={item.id || index}>{item.texto}<small>{item.autor} · {item.data}</small></p>) : <p>Sem notas internas.</p>}</div><div className="modal-actions"><button className="button button-outline" onClick={() => handleEditMember(selectedMember)}>Editar dados</button><button className="button button-outline" onClick={() => handleToggleHighlight(selectedMember)}>{selectedMember.destacado ? 'Remover destaque' : 'Destacar membro'}</button>{selectedMember.estado === 'aprovado' && <button className="button button-danger-soft" onClick={() => handleKickMembro(selectedMember)}>Remover membro</button>}</div></div></div>}
 
         {showRoleEditor && <div className="modal-backdrop" onClick={() => setShowRoleEditor(false)}><div className="modal-card role-editor-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">CONFIGURAÇÃO DE ACESSO</span><h2>{selectedRoleId ? 'Editar cargo' : 'Criar cargo'}</h2></div><button className="icon-button" onClick={() => setShowRoleEditor(false)}>×</button></div><form onSubmit={handleSaveRole} className="form-stack"><label className="field"><span>Nome do cargo</span><input value={roleForm.name} onChange={event => setRoleForm({ ...roleForm, name: event.target.value })} required/></label><label className="field"><span>Descrição</span><input value={roleForm.description} onChange={event => setRoleForm({ ...roleForm, description: event.target.value })} placeholder="Responsabilidades deste cargo"/></label><label className="field"><span>Cor de identificação</span><select value={roleForm.color} onChange={event => setRoleForm({ ...roleForm, color: event.target.value })}>{ROLE_COLORS.map(color => <option key={color.value} value={color.value}>{color.label}</option>)}</select></label><div className="permissions-editor"><div className="panel-heading"><div><h3>Permissões</h3><p>Seleciona o que este cargo pode fazer.</p></div><span className="count-chip">{roleForm.permissions.length} selecionadas</span></div>{Array.isArray(PERMISSION_GROUPS) && PERMISSION_GROUPS.map(group => <div className="permission-group" key={group.title}><strong>{group.title}</strong>{Array.isArray(group.items) && group.items.map(([key, label]) => <label className="permission-option" key={key}><input type="checkbox" checked={roleForm.permissions.includes(key)} onChange={() => toggleRolePermission(key)}/><span>{label}</span></label>)}</div>)}</div><div className="modal-actions"><button type="button" className="button button-outline" onClick={() => setShowRoleEditor(false)}>Cancelar</button><button className="button button-primary">Guardar cargo</button></div></form></div></div>}
 
