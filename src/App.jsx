@@ -26,7 +26,7 @@ import { DEFAULT_ROLES, ROLE_COLORS, NAV_ITEMS, DEFAULT_AVATAR, PERMISSION_GROUP
 import { formatDateTime, getRoleColor, getMemberName, matchesMember } from './utils';
 
 /* -------------------------------------------------------------------------- */
-/* MAGNATAS 01! — COMMUNITY PORTAL (VERSÃO COMPLETA E ATUALIZADA)            */
+/* MAGNATAS 01! — COMMUNITY PORTAL (VERSÃO ATUALIZADA)                       */
 /* -------------------------------------------------------------------------- */
 
 function StatusPill({ status }) {
@@ -603,25 +603,6 @@ export default function App() {
     }
   };
 
-  const handleToggleRole = async (targetId, roleName) => {
-    if (!isAdminOrStaff) {
-      window.alert('Acesso negado: Apenas membros da Staff e Support podem gerir cargos.');
-      return;
-    }
-    const target = usersList.find(item => item.id === targetId);
-    const role = allRoles.find(item => item.name === roleName);
-    if (!target || !role) return;
-    const current = target.roles || [];
-    const updated = current.includes(roleName) ? current.filter(name => name !== roleName) : [...current, roleName];
-    try {
-      await updateDoc(doc(db, 'users', targetId), { roles: updated });
-      setSelectedMember(selected => selected?.id === targetId ? { ...selected, roles: updated } : selected);
-      await addLog('Cargos', `${current.includes(roleName) ? 'Removeu' : 'Atribuiu'} o cargo ${roleName} a ${target.username}.`);
-    } catch (error) {
-      window.alert(`Erro ao atualizar cargos: ${error.message}`);
-    }
-  };
-
   const openRoleEditor = role => {
     if (!isAdminOrStaff) return window.alert('Não tens permissão.');
     try {
@@ -1050,37 +1031,63 @@ export default function App() {
 
         {notificationMenuOpen && <button className="notification-backdrop" onClick={() => setNotificationMenuOpen(false)} aria-label="Fechar notificações"/>}
 
-        {selectedMember && <div className="modal-backdrop" onClick={() => setSelectedMember(null)}><div className="modal-card member-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">PERFIL DE MEMBRO</span><h2>Informações do membro</h2></div><button className="icon-button" onClick={() => setSelectedMember(null)}>×</button></div><div className="member-profile-head"><Avatar member={selectedMember} size="xl"/><div><h2>{getMemberName(selectedMember)}</h2><p>@{selectedMember.username || 'sem-utilizador'} · {selectedMember.discordTag || 'Discord não indicado'}</p><StatusPill status={selectedMember.estado}/></div></div><div className="member-detail-grid"><span><small>ID In-Game</small><strong className="id-value">{selectedMember.idInGame || 'Não indicado'}</strong></span><span><small>Idade</small><strong>{selectedMember.idade || '—'}</strong></span><span><small>Kills</small><strong>{selectedMember.killsAtual || '—'}</strong></span><span><small>Tempo de cidade</small><strong>{selectedMember.tempoCidade || '—'}</strong></span><span><small>E-mail</small><strong>{selectedMember.email || '—'}</strong></span><span><small>Data de registo</small><strong>{formatDateTime(selectedMember.createdAt)}</strong></span></div>
-          
-          <div className="member-detail-block">
-            <small>Cargos do membro</small>
-            {isAdminOrStaff ? (
-              <div className="role-assignment-grid">
-                {allRoles.map(role => (
-                  <button 
-                    type="button" 
-                    key={role.id} 
-                    disabled={role.protected && !isFounder} 
-                    className={`role-assignment-option ${(selectedMember.roles || []).includes(role.name) ? 'assigned' : ''}`} 
-                    onClick={() => handleToggleRole(selectedMember.id, role.name)}
-                  >
-                    <span className={`role-badge ${getRoleColor(role)}`}>{role.name}</span>
-                    <strong>{(selectedMember.roles || []).includes(role.name) ? '✓' : '+'}</strong>
-                  </button>
-                ))}
+        {selectedMember && (
+          <div className="modal-backdrop" onClick={() => setSelectedMember(null)}>
+            <div className="modal-card member-modal" onClick={event => event.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <span className="eyebrow">PERFIL DE MEMBRO</span>
+                  <h2>Informações do membro</h2>
+                </div>
+                <button className="icon-button" onClick={() => setSelectedMember(null)}>×</button>
               </div>
-            ) : (
-              <div className="role-list" style={{ marginTop: '6px' }}>
-                {(selectedMember.roles || []).length > 0 ? (
-                  (selectedMember.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)
-                ) : (
-                  <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Sem cargos atribuídos.</span>
-                )}
-              </div>
-            )}
-          </div>
 
-          <div className="member-detail-block"><small>Biografia</small><p>{selectedMember.biografia || 'Sem biografia definida.'}</p></div><div className="member-detail-block"><small>Histórico de punições</small>{selectedMember.punicoes?.length ? selectedMember.punicoes.map((item, index) => <p className="modal-history-line" key={item.id || index}><strong>{item.tipo}</strong> — {item.motivo} <small>{item.data}</small></p>) : <p>Sem punições registadas.</p>}</div><div className="member-detail-block"><small>Notas internas da Staff</small>{selectedMember.notasInternas?.length ? selectedMember.notasInternas.map((item, index) => <p className="modal-history-line" key={item.id || index}>{item.texto}<small>{item.autor} · {item.data}</small></p>) : <p>Sem notas internas.</p>}</div><div className="modal-actions"><button className="button button-outline" onClick={() => handleEditMember(selectedMember)}>Editar dados</button><button className="button button-outline" onClick={() => handleToggleHighlight(selectedMember)}>{selectedMember.destacado ? 'Remover destaque' : 'Destacar membro'}</button>{selectedMember.estado === 'aprovado' && <button className="button button-danger-soft" onClick={() => handleKickMembro(selectedMember)}>Remover membro</button>}</div></div></div>}
+              <div className="member-profile-head">
+                <Avatar member={selectedMember} size="xl"/>
+                <div>
+                  <h2>{getMemberName(selectedMember)}</h2>
+                  <p>@{selectedMember.username || 'sem-utilizador'} · {selectedMember.discordTag || 'Discord não indicado'}</p>
+                  <StatusPill status={selectedMember.estado}/>
+                </div>
+              </div>
+
+              <div className="member-detail-grid-clean">
+                <div className="clean-field-box">
+                  <small>ID In-Game</small>
+                  <strong className="id-value">{selectedMember.idInGame || 'Não indicado'}</strong>
+                </div>
+                <div className="clean-field-box">
+                  <small>Nome In-Game</small>
+                  <strong>{selectedMember.nomeInGame || getMemberName(selectedMember)}</strong>
+                </div>
+              </div>
+
+              <div className="member-detail-block">
+                <small>Cargos do membro</small>
+                <div className="role-list" style={{ marginTop: '8px' }}>
+                  {(selectedMember.roles || []).length > 0 ? (
+                    (selectedMember.roles || []).map(role => <RoleBadge key={role} role={role} allRoles={allRoles}/>)
+                  ) : (
+                    <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Sem cargos atribuídos.</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="member-detail-block">
+                <small>Biografia</small>
+                <p>{selectedMember.biografia || 'Sem biografia definida.'}</p>
+              </div>
+
+              {isAdminOrStaff && (
+                <div className="modal-actions">
+                  <button className="button button-outline" onClick={() => handleEditMember(selectedMember)}>Editar dados</button>
+                  <button className="button button-outline" onClick={() => handleToggleHighlight(selectedMember)}>{selectedMember.destacado ? 'Remover destaque' : 'Destacar membro'}</button>
+                  {selectedMember.estado === 'aprovado' && <button className="button button-danger-soft" onClick={() => handleKickMembro(selectedMember)}>Remover membro</button>}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {showRoleEditor && <div className="modal-backdrop" onClick={() => setShowRoleEditor(false)}><div className="modal-card role-editor-modal" onClick={event => event.stopPropagation()}><div className="modal-header"><div><span className="eyebrow">CONFIGURAÇÃO DE ACESSO</span><h2>{selectedRoleId ? 'Editar cargo' : 'Criar cargo'}</h2></div><button className="icon-button" onClick={() => setShowRoleEditor(false)}>×</button></div><form onSubmit={handleSaveRole} className="form-stack"><label className="field"><span>Nome do cargo</span><input value={roleForm.name} onChange={event => setRoleForm({ ...roleForm, name: event.target.value })} required/></label><label className="field"><span>Descrição</span><input value={roleForm.description} onChange={event => setRoleForm({ ...roleForm, description: event.target.value })} placeholder="Responsabilidades deste cargo"/></label><label className="field"><span>Cor de identificação</span><select value={roleForm.color} onChange={event => setRoleForm({ ...roleForm, color: event.target.value })}>{ROLE_COLORS.map(color => <option key={color.value} value={color.value}>{color.label}</option>)}</select></label><div className="permissions-editor"><div className="panel-heading"><div><h3>Permissões</h3><p>Seleciona o que este cargo pode fazer.</p></div><span className="count-chip">{roleForm.permissions.length} selecionadas</span></div>{Array.isArray(PERMISSION_GROUPS) && PERMISSION_GROUPS.map(group => <div className="permission-group" key={group.title}><strong>{group.title}</strong>{Array.isArray(group.items) && group.items.map(([key, label]) => <label className="permission-option" key={key}><input type="checkbox" checked={roleForm.permissions.includes(key)} onChange={() => toggleRolePermission(key)}/><span>{label}</span></label>)}</div>)}</div><div className="modal-actions"><button type="button" className="button button-outline" onClick={() => setShowRoleEditor(false)}>Cancelar</button><button className="button button-primary">Guardar cargo</button></div></form></div></div>}
 
@@ -1370,7 +1377,7 @@ body.dark-theme {
 .application-admin-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:15px;border-bottom:1px solid var(--border-color)}
 .candidate-data-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:15px 0}
 .candidate-data-grid>span{background:var(--bg-main);border:1px solid var(--border-color);border-radius:9px;padding:10px;display:flex;flex-direction:column;gap:5px;min-width:0}
-.candidate-data-grid small,.member-detail-grid small{font-size:9px;color:var(--text-muted);font-weight:750;text-transform:uppercase;letter-spacing:.45px}
+.candidate-data-grid small,.member-detail-grid-clean small{font-size:9px;color:var(--text-muted);font-weight:750;text-transform:uppercase;letter-spacing:.45px}
 .candidate-data-grid strong{font-size:11px;color:var(--text-main);overflow-wrap:anywhere}
 .candidate-data-grid .highlight-id{background:#fff0f1;border-color:#f3cbd0}
 .candidate-data-grid .highlight-id strong{color:#c72b3b;font:850 14px Manrope,sans-serif}
@@ -1431,14 +1438,13 @@ body.dark-theme {
 .member-profile-head{display:flex;align-items:center;gap:15px;margin-bottom:18px}
 .member-profile-head h2{font:800 18px Manrope,sans-serif;margin:0 0 5px}
 .member-profile-head p{font-size:11px;color:var(--text-muted);margin:0 0 8px}
-.member-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.member-detail-grid>span{display:flex;flex-direction:column;gap:6px;padding:11px;background:var(--bg-main);border:1px solid var(--border-color);border-radius:9px;min-width:0}
-.member-detail-grid strong{font-size:11px;color:var(--text-main);overflow-wrap:anywhere}
+.member-detail-grid-clean{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.clean-field-box{display:flex;flex-direction:column;gap:6px;padding:11px;background:var(--bg-main);border:1px solid var(--border-color);border-radius:9px;min-width:0}
+.clean-field-box small{font-size:9px;color:var(--text-muted);font-weight:750;text-transform:uppercase;letter-spacing:.45px}
+.clean-field-box strong{font-size:11px;color:var(--text-main);overflow-wrap:anywhere}
 .member-detail-block{border-top:1px solid var(--border-color);padding-top:14px;margin-top:14px}
 .member-detail-block>small{display:block;font-size:9px;color:var(--text-muted);text-transform:uppercase;font-weight:850;letter-spacing:.7px;margin-bottom:8px}
 .member-detail-block>p{font-size:11px;color:var(--text-muted);line-height:1.6;margin:0}
-.modal-history-line{padding:8px 0;border-bottom:1px solid var(--border-color)!important}
-.modal-history-line small{display:block;font-size:9px;color:var(--text-muted);margin-top:4px}
 .modal-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:20px}
 .modal-actions.vertical{flex-direction:column}
 .modal-actions.vertical .button{width:100%}
@@ -1479,6 +1485,6 @@ body.dark-theme {
 
 @media(max-width:1180px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.role-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.resource-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.content-area{padding:25px 24px}.topbar{padding:0 24px}}
 @media(max-width:900px){.sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-102%);transition:transform .23s ease;box-shadow:12px 0 40px #0002}.sidebar.sidebar-open{transform:translateX(0)}.mobile-backdrop{display:block;position:fixed;inset:0;background:#11182788;border:0;z-index:35}.mobile-close{display:block;margin-left:auto;border:0;background:transparent;color:#fff;font-size:23px}.mobile-menu-button{display:inline-grid;place-items:center;border:1px solid var(--border-color);background:var(--bg-surface);border-radius:8px;width:34px;height:34px;color:var(--text-main)}.dashboard-columns{grid-template-columns:1fr}.profile-layout{grid-template-columns:1fr 1.4fr}.admin-two-columns,.roles-admin-layout{grid-template-columns:1fr}}
-@media(max-width:640px){.topbar{height:68px;padding:0 14px}.topbar-actions{gap:8px}.connection-status,.topbar-avatar span,.logout-top{display:none}.content-area{padding:19px 13px 25px}.page-context{display:none}.breadcrumb{font-size:10px;gap:7px}.section-heading{align-items:flex-start;flex-direction:column}.section-heading h2{font-size:24px}.date-chip{white-space:normal}.welcome-banner{padding:23px 20px;min-height:165px}.welcome-banner h1{font-size:27px}.welcome-banner p{max-width:245px;font-size:11px;line-height:1.6}.welcome-mark{font-size:58px;margin-right:0}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat-card{padding:13px;gap:9px}.stat-icon{width:32px;height:32px;font-size:15px}.stat-copy strong{font-size:22px}.stat-copy span{font-size:10px}.stat-copy small{font-size:9px}.quick-links{grid-template-columns:1fr}.quick-links button{padding:13px}.filter-tabs{margin-right:-13px;padding-right:13px}.filter-tabs button{padding:8px 10px;font-size:10px}.table-toolbar{align-items:stretch;flex-direction:column}.toolbar-note{display:none}.resource-grid,.radio-grid,.role-grid{grid-template-columns:1fr}.resource-card>img{height:190px}.form-grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.admin-filters{flex-direction:column}.admin-filters select{width:100%}.candidate-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.candidate-actions{flex-wrap:wrap}.candidate-actions .button{flex:1}.profile-layout{grid-template-columns:1fr}.application-form{grid-template-columns:1fr}.application-summary{grid-template-columns:1fr}.event-card{align-items:flex-start;gap:11px;padding:11px}.event-date-large{width:55px;min-width:55px;height:61px}.event-date-large strong{font-size:23px}.notification-card{align-items:flex-start;flex-wrap:wrap}.notification-card .button{margin-left:49px}.app-footer{padding:12px 14px;gap:8px;font-size:8px}.auth-card,.application-card{padding:24px 19px}.member-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.modal-card{padding:17px}.member-profile-head .avatar{width:60px;height:60px}.modal-actions{join:stretch}.modal-actions .button{flex:1}.role-assignment-grid{grid-template-columns:1fr}.admin-tabs{margin-right:-13px;padding-right:13px}.admin-tabs button{font-size:10px;padding:8px 10px}}
+@media(max-width:640px){.topbar{height:68px;padding:0 14px}.topbar-actions{gap:8px}.connection-status,.topbar-avatar span,.logout-top{display:none}.content-area{padding:19px 13px 25px}.page-context{display:none}.breadcrumb{font-size:10px;gap:7px}.section-heading{align-items:flex-start;flex-direction:column}.section-heading h2{font-size:24px}.date-chip{white-space:normal}.welcome-banner{padding:23px 20px;min-height:165px}.welcome-banner h1{font-size:27px}.welcome-banner p{max-width:245px;font-size:11px;line-height:1.6}.welcome-mark{font-size:58px;margin-right:0}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat-card{padding:13px;gap:9px}.stat-icon{width:32px;height:32px;font-size:15px}.stat-copy strong{font-size:22px}.stat-copy span{font-size:10px}.stat-copy small{font-size:9px}.quick-links{grid-template-columns:1fr}.quick-links button{padding:13px}.filter-tabs{margin-right:-13px;padding-right:13px}.filter-tabs button{padding:8px 10px;font-size:10px}.table-toolbar{align-items:stretch;flex-direction:column}.toolbar-note{display:none}.resource-grid,.radio-grid,.role-grid{grid-template-columns:1fr}.resource-card>img{height:190px}.form-grid{grid-template-columns:1fr}.field-wide{grid-column:auto}.admin-filters{flex-direction:column}.admin-filters select{width:100%}.candidate-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.candidate-actions{flex-wrap:wrap}.candidate-actions .button{flex:1}.profile-layout{grid-template-columns:1fr}.application-form{grid-template-columns:1fr}.application-summary{grid-template-columns:1fr}.event-card{align-items:flex-start;gap:11px;padding:11px}.event-date-large{width:55px;min-width:55px;height:61px}.event-date-large strong{font-size:23px}.notification-card{align-items:flex-start;flex-wrap:wrap}.notification-card .button{margin-left:49px}.app-footer{padding:12px 14px;gap:8px;font-size:8px}.auth-card,.application-card{padding:24px 19px}.member-detail-grid-clean{grid-template-columns:repeat(2,minmax(0,1fr))}.modal-card{padding:17px}.member-profile-head .avatar{width:60px;height:60px}.modal-actions{join:stretch}.modal-actions .button{flex:1}.role-assignment-grid{grid-template-columns:1fr}.admin-tabs{margin-right:-13px;padding-right:13px}.admin-tabs button{font-size:10px;padding:8px 10px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 `;
